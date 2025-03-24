@@ -4,15 +4,12 @@ from dataclasses import dataclass
 import os
 
 @dataclass
-class CakeGame:
-    def __init__(self, width: int = 5, height: int = 4, max_capacity: int = 6):  # Changed to 5x4
-        self.width = width
-        self.height = height
-        self.max_capacity = max_capacity
-        self.tubes: List[Tube] = []
-        self.moves = 0
-        self.selected_tube = None
-        self.selected_layer_pos = None
+class CakeLayer:
+    color: str
+    size: int
+
+    def __str__(self):
+        return f"{self.color}{self.size}"
 
 class Tube:
     def __init__(self, max_capacity: int = 6):
@@ -58,33 +55,41 @@ class Tube:
         return " ".join(str(layer) for layer in self.layers)
 
 class CakeGame:
-    def __init__(self, width: int = 5, height: int = 5, max_capacity: int = 6):
+    def __init__(self, width: int = 5, height: int = 4, max_capacity: int = 6):
         self.width = width
         self.height = height
         self.max_capacity = max_capacity
-        self.tubes: List[Tube] = []
+        self.tubes: List[Tube] = [Tube(max_capacity) for _ in range(width * height)]
         self.moves = 0
         self.selected_tube = None
         self.selected_layer_pos = None
     
     def initialize_level(self, level_file: str):
-        """Load level from file"""
-        self.tubes = []
+        """Load level with specified color distribution"""
+        self.tubes = [Tube(self.max_capacity) for _ in range(self.width * self.height)]
         self.moves = 0
         
         try:
             with open(level_file, 'r') as f:
                 for line in f:
-                    tube = Tube(self.max_capacity)
-                    layers = line.strip().split()
-                    for layer_str in layers:
-                        color = layer_str[0].lower()
-                        size = int(layer_str[1:])
+                    if line.startswith('#') or not line.strip():
+                        continue
+                    
+                    parts = line.strip().split(':')
+                    if len(parts) < 2:
+                        continue
+                        
+                    tube_idx, layers_str = parts[0], parts[1]
+                    tube = self.tubes[int(tube_idx)]
+                    
+                    for layer_str in layers_str.split():
+                        if not layer_str:
+                            continue
+                        color = layer_str[0].upper()
+                        size = int(layer_str[1:]) if len(layer_str) > 1 else 1
                         tube.add_layer(CakeLayer(color, size))
-                    self.tubes.append(tube)
         except FileNotFoundError:
-            print(f"Level file {level_file} not found. Starting empty level.")
-            self.tubes = [Tube(self.max_capacity) for _ in range(self.width * self.height)]
+            print(f"Error: Level file {level_file} not found")
     
     def move_layer(self, from_idx: int, layer_pos: int, to_idx: int) -> bool:
         """Move layer from one tube to another"""
@@ -127,8 +132,8 @@ class CakeGame:
         if row < self.height - 1:
             adjacent.append(tube_idx + self.width)  # Down
         if col > 0:
-            adjacent.append(tube_idx - 1)            # Left
+            adjacent.append(tube_idx - 1)          # Left
         if col < self.width - 1:
-            adjacent.append(tube_idx + 1)            # Right
+            adjacent.append(tube_idx + 1)          # Right
             
         return adjacent
