@@ -72,22 +72,34 @@ class CakeGame:
         try:
             with open(level_file, 'r') as f:
                 for line in f:
-                    if line.startswith('#') or not line.strip():
+                    line = line.strip()
+                    
+                    # Skip comments and empty lines
+                    if line.startswith('#') or not line:
                         continue
                     
-                    parts = line.strip().split(':')
-                    if len(parts) < 2:
+                    # Skip metadata lines
+                    if line.startswith('width:') or line.startswith('height:'):
                         continue
-                        
-                    tube_idx, layers_str = parts[0], parts[1]
-                    tube = self.tubes[int(tube_idx)]
                     
-                    for layer_str in layers_str.split():
-                        if not layer_str:
+                    # Check for tube data
+                    if ':' in line:
+                        parts = line.split(':', 1)
+                        if len(parts) < 2:
                             continue
-                        color = layer_str[0].upper()
-                        size = int(layer_str[1:]) if len(layer_str) > 1 else 1
-                        tube.add_layer(CakeLayer(color, size))
+                            
+                        try:
+                            tube_idx, layers_str = parts[0], parts[1].strip()
+                            tube = self.tubes[int(tube_idx)]
+                            
+                            for layer_str in layers_str.split():
+                                if not layer_str:
+                                    continue
+                                color = layer_str[0].upper()
+                                size = int(layer_str[1:]) if len(layer_str) > 1 else 1
+                                tube.add_layer(CakeLayer(color, size))
+                        except (ValueError, IndexError) as e:
+                            print(f"Error parsing line '{line}': {e}")
         except FileNotFoundError:
             print(f"Error: Level file {level_file} not found")
     

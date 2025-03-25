@@ -1,0 +1,11 @@
+# Level 2
+# Difficulty: Medium
+# Moves: 12
+width: 4
+height: 3
+0: R1 G2 B3
+1: G2 B3 R1
+2: B3 R1 G2
+3: Y4 Y4 Y4
+4: 
+5: 

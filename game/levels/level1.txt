@@ -1,0 +1,11 @@
+# Level 1
+# Difficulty: Easy
+# Moves: 8
+width: 4
+height: 3
+0: R2 R2 R2
+1: G3 G3 G3
+2: B1 B1 B1
+3: Y4 Y4 Y4
+4: 
+5: 
