@@ -17,25 +17,21 @@ class Tube:
         self.max_capacity = max_capacity
     
     def can_add(self, layer: CakeLayer) -> bool:
-        """Check if we can add this layer to the top"""
         return (len(self.layers) < self.max_capacity and 
                 (self.is_empty() or self.top_layer().color == layer.color))
     
     def add_layer(self, layer: CakeLayer) -> bool:
-        """Add layer to the top (stack behavior)"""
         if self.can_add(layer):
             self.layers.append(layer)
             return True
         return False
     
     def remove_layer(self, index: int) -> Optional[CakeLayer]:
-        """Remove layer from any position (list behavior)"""
         if 0 <= index < len(self.layers):
             return self.layers.pop(index)
         return None
     
     def top_layer(self) -> Optional[CakeLayer]:
-        """Get top layer without removing it"""
         return self.layers[-1] if self.layers else None
     
     def is_empty(self) -> bool:
@@ -45,7 +41,6 @@ class Tube:
         return len(self.layers) == self.max_capacity
     
     def is_complete(self) -> bool:
-        """All layers same color and filled to capacity"""
         if not self.is_full():
             return False
         first_color = self.layers[0].color if self.layers else None
@@ -65,7 +60,6 @@ class CakeGame:
         self.selected_layer_pos = None
     
     def initialize_level(self, level_file: str):
-        """Load level with specified color distribution"""
         self.tubes = [Tube(self.max_capacity) for _ in range(self.width * self.height)]
         self.moves = 0
         
@@ -92,7 +86,6 @@ class CakeGame:
             print(f"Error: Level file {level_file} not found")
     
     def move_layer(self, from_idx: int, layer_pos: int, to_idx: int) -> bool:
-        """Move layer from one tube to another"""
         if from_idx == to_idx:
             return False
         if not (0 <= from_idx < len(self.tubes) and 0 <= to_idx < len(self.tubes)):
@@ -109,51 +102,56 @@ class CakeGame:
             self.moves += 1
             return True
         else:
-            # Revert if move failed
             from_tube.layers.insert(layer_pos, layer)
             return False
-        
-    def auto_merge(self, tube_idx: int):
-        directions = self.get_adjacent_tubes(tube_idx)
-        current_tube = self.tubes[tube_idx]
-        if current_tube.is_empty():
-            return
-
-        top_color = current_tube.top_layer().color
-
-        for neighbor_idx in directions:
-            neighbor_tube = self.tubes[neighbor_idx]
-            same_color_layers = [layer for layer in neighbor_tube.layers if layer.color == top_color]
-
-            available_space = self.max_capacity - len(current_tube.layers)
-            to_move = same_color_layers[:available_space]
-
-            for layer in to_move:
-                current_tube.add_layer(layer)
-                neighbor_tube.layers.remove(layer)
-                print(f"Juntou camada {layer} do tubo {neighbor_idx} para o tubo {tube_idx}.")
     
     def is_solved(self) -> bool:
-        """Check if all tubes are complete or empty"""
         return all(tube.is_complete() or tube.is_empty() for tube in self.tubes)
     
     def get_state_hash(self) -> str:
-        """Get unique string representation of current state"""
         return "|".join(str(tube) for tube in self.tubes)
     
     def get_adjacent_tubes(self, tube_idx: int) -> List[int]:
-        """Get indices of adjacent tubes (up, down, left, right)"""
         row = tube_idx // self.width
         col = tube_idx % self.width
         adjacent = []
         
         if row > 0:
-            adjacent.append(tube_idx - self.width)  # Up
+            adjacent.append(tube_idx - self.width)
         if row < self.height - 1:
-            adjacent.append(tube_idx + self.width)  # Down
+            adjacent.append(tube_idx + self.width)
         if col > 0:
-            adjacent.append(tube_idx - 1)          # Left
+            adjacent.append(tube_idx - 1)
         if col < self.width - 1:
-            adjacent.append(tube_idx + 1)          # Right
+            adjacent.append(tube_idx + 1)
             
         return adjacent
+
+    # ✅ Função nova para mover todas as fatias
+    def move_all_layers(self, from_idx: int, to_idx: int) -> bool:
+        """Move todas as fatias possíveis do tubo origem para o tubo destino."""
+        if from_idx == to_idx:
+            return False
+
+        from_tube = self.tubes[from_idx]
+        to_tube = self.tubes[to_idx]
+
+        if from_tube.is_empty() or to_tube.is_full():
+            return False
+
+        layers_to_move = from_tube.layers[::-1]
+        space_available = to_tube.max_capacity - len(to_tube.layers)
+
+        layers_to_transfer = []
+        for layer in layers_to_move:
+            if len(layers_to_transfer) < space_available:
+                layers_to_transfer.append(layer)
+            else:
+                break
+
+        for layer in reversed(layers_to_transfer):
+            to_tube.add_layer(layer)
+
+        from_tube.layers = from_tube.layers[:-len(layers_to_transfer)]
+        self.moves += 1
+        return True
