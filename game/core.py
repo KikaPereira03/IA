@@ -112,6 +112,26 @@ class CakeGame:
             # Revert if move failed
             from_tube.layers.insert(layer_pos, layer)
             return False
+        
+    def auto_merge(self, tube_idx: int):
+        directions = self.get_adjacent_tubes(tube_idx)
+        current_tube = self.tubes[tube_idx]
+        if current_tube.is_empty():
+            return
+
+        top_color = current_tube.top_layer().color
+
+        for neighbor_idx in directions:
+            neighbor_tube = self.tubes[neighbor_idx]
+            same_color_layers = [layer for layer in neighbor_tube.layers if layer.color == top_color]
+
+            available_space = self.max_capacity - len(current_tube.layers)
+            to_move = same_color_layers[:available_space]
+
+            for layer in to_move:
+                current_tube.add_layer(layer)
+                neighbor_tube.layers.remove(layer)
+                print(f"Juntou camada {layer} do tubo {neighbor_idx} para o tubo {tube_idx}.")
     
     def is_solved(self) -> bool:
         """Check if all tubes are complete or empty"""
