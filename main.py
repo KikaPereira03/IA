@@ -2,16 +2,21 @@ import pygame
 import sys
 import time
 import random
+
+from typing import List, Tuple, Optional
 from game.core import CakeGame, CakeLayer
 from game.solver import GameSolver
 
 class CakeGameUI:
     def __init__(self, level_file="game/levels/level1.txt", width: int = 4, height: int = 5):
         pygame.init()
+        self.level_file = level_file  # guarda o nome do nível atual
         self.queue_slots = 3
         self.game = CakeGame(width, height)
         self.load_level(level_file)
         self.solver = GameSolver(self.game)
+        
+
 
         self.screen_width = 1000
         self.screen_height = 800
@@ -51,8 +56,17 @@ class CakeGameUI:
         self.font = pygame.font.SysFont('Arial', 24)
         self.big_font = pygame.font.SysFont('Arial', 36)
 
-    def generate_random_plate(self):
-        return [CakeLayer(random.choice(['R', 'G', 'B', 'Y']), 1) for _ in range(random.randint(2, 4))]
+    def generate_random_plate(self) -> List[CakeLayer]:
+        if "level1" in self.level_file:
+            colors = ['R', 'G']
+        elif "level2" in self.level_file:
+            colors = ['R', 'G', 'B']
+        elif "level3" in self.level_file:
+            colors = ['R', 'G', 'B', 'Y']
+        else:
+            colors = ['R', 'G', 'B', 'Y', 'P', 'O', 'C', 'M']  # default todas
+
+        return [CakeLayer(random.choice(colors), 1) for _ in range(random.randint(2, 4))]
 
     def get_cell_rect(self, tube_idx: int) -> pygame.Rect:
         grid_width = self.game.width
