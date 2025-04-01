@@ -176,6 +176,7 @@ class CakeGameUI:
             for idx, tube in enumerate(self.game.tubes):
                 if self.get_cell_rect(idx).collidepoint(pos) and not tube.is_full() and tube.is_empty():
                     tube.add_layers_any_color(self.queue_plates[self.selected_queue_idx])
+                    self.game.merge_adjacent_layers(idx)
                     self.queue_plates[self.selected_queue_idx] = self.generate_random_plate()
                     self.selected_queue_idx = None
                     return

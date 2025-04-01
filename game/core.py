@@ -34,9 +34,10 @@ class Tube:
 
 
     def remove_layer(self, index: int) -> Optional[CakeLayer]:
-        if 0 <= index < len(self.layers):
+        if -len(self.layers) <= index < len(self.layers):
             return self.layers.pop(index)
         return None
+
     
     def top_layer(self) -> Optional[CakeLayer]:
         return self.layers[-1] if self.layers else None
@@ -133,6 +134,23 @@ class CakeGame:
             adjacent.append(tube_idx + 1)
             
         return adjacent
+    
+    def merge_adjacent_layers(self, tube_idx: int):
+            main_tube = self.tubes[tube_idx]
+            if main_tube.is_full() or main_tube.is_empty():
+                return
+
+            top_color = main_tube.top_layer().color
+            adjacent_idxs = self.get_adjacent_tubes(tube_idx)
+
+            for adj_idx in adjacent_idxs:
+                adj_tube = self.tubes[adj_idx]
+                while not main_tube.is_full() and not adj_tube.is_empty():
+                    adj_top = adj_tube.top_layer()
+                    if adj_top.color == top_color:
+                        main_tube.add_layer(adj_tube.remove_layer(-1))
+                    else:
+                        break
 
     # ✅ Função nova para mover todas as fatias
     def move_all_layers(self, from_idx: int, to_idx: int) -> bool:
@@ -162,3 +180,5 @@ class CakeGame:
         from_tube.layers = from_tube.layers[:-len(layers_to_transfer)]
         self.moves += 1
         return True
+    
+        
