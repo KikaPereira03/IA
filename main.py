@@ -101,23 +101,34 @@ class CakeGameUI:
             layer_radius = self.cake_radius * 0.75
             color = self.color_map.get(layer.color, (220, 220, 220))
 
-            # sombra leve
-            shadow_rect = pygame.Rect(
-                center_x - layer_radius,
-                layer_y + 2 - self.layer_height // 2,
-                layer_radius * 2,
-                self.layer_height
-            )
-            pygame.draw.ellipse(surface, (100, 100, 100, 50), shadow_rect)
+            # sombra de profundidade
+            shadow_color = tuple(max(0, c - 40) for c in color)
+            highlight_color = tuple(min(255, c + 40) for c in color)
 
+            # retângulo base da camada
             layer_rect = pygame.Rect(
                 center_x - layer_radius,
                 layer_y - self.layer_height // 2,
                 layer_radius * 2,
                 self.layer_height
             )
+
+            # camada de fundo (sombra inferior)
+            shadow_rect = layer_rect.copy()
+            shadow_rect.move_ip(0, 2)
+            pygame.draw.ellipse(surface, shadow_color, shadow_rect)
+
+            # camada principal (meio)
             pygame.draw.ellipse(surface, color, layer_rect)
-            pygame.draw.ellipse(surface, (60, 60, 60), layer_rect, 2)
+
+            # camada de topo (luz superior)
+            top_rect = layer_rect.copy()
+            top_rect.inflate_ip(-layer_radius * 0.4, -self.layer_height * 0.4)
+            top_rect.move_ip(0, -1)
+            pygame.draw.ellipse(surface, highlight_color, top_rect)
+
+            # contorno final
+            pygame.draw.ellipse(surface, (50, 50, 50), layer_rect, 1)
 
 
     def draw(self):
