@@ -91,10 +91,25 @@ class CakeGameUI:
     def draw_plate_with_layers(self, surface, center_x, center_y, layers):
         pygame.draw.circle(surface, self.plate_color, (center_x, center_y), self.cake_radius)
         pygame.draw.circle(surface, (200, 200, 200), (center_x, center_y), self.cake_radius, 2)
+
+        num_layers = len(layers)
+        total_height = num_layers * (self.layer_height + 2) - 2
+        base_y = center_y + total_height // 2 - self.layer_height // 2
+
         for i, layer in enumerate(layers):
-            layer_y = center_y - (i * self.layer_height)
-            layer_radius = self.cake_radius * 0.85
-            color = self.color_map.get(layer.color, (200, 200, 200))
+            layer_y = base_y - i * (self.layer_height + 2)
+            layer_radius = self.cake_radius * 0.75
+            color = self.color_map.get(layer.color, (220, 220, 220))
+
+            # sombra leve
+            shadow_rect = pygame.Rect(
+                center_x - layer_radius,
+                layer_y + 2 - self.layer_height // 2,
+                layer_radius * 2,
+                self.layer_height
+            )
+            pygame.draw.ellipse(surface, (100, 100, 100, 50), shadow_rect)
+
             layer_rect = pygame.Rect(
                 center_x - layer_radius,
                 layer_y - self.layer_height // 2,
@@ -102,7 +117,8 @@ class CakeGameUI:
                 self.layer_height
             )
             pygame.draw.ellipse(surface, color, layer_rect)
-            pygame.draw.ellipse(surface, (100, 100, 100), layer_rect, 1)
+            pygame.draw.ellipse(surface, (60, 60, 60), layer_rect, 2)
+
 
     def draw(self):
         self.screen.fill(self.bg_color)
