@@ -8,7 +8,7 @@ from game.core import CakeGame, CakeLayer
 from game.solver import GameSolver
 
 class CakeGameUI:
-    def __init__(self, level_file="game/levels/level1.txt", width: int = 4, height: int = 5):
+    def __init__(self, level_file="game/levels/level1.txt", width: int = 4, height: int = 5, max_capacity = 6):
         pygame.init()
         self.level_file = level_file  # guarda o nome do nível atual
         self.queue_slots = 3
@@ -175,17 +175,42 @@ class CakeGameUI:
         if self.selected_queue_idx is not None:
             for idx, tube in enumerate(self.game.tubes):
                 if self.get_cell_rect(idx).collidepoint(pos) and not tube.is_full() and tube.is_empty():
-                    tube.add_layers_any_color(self.queue_plates[self.selected_queue_idx])
-                    self.game.merge_adjacent_layers(idx)
-                    self.queue_plates[self.selected_queue_idx] = self.generate_random_plate()
-                    self.selected_queue_idx = None
-                    return
+                    plate = self.queue_plates[self.selected_queue_idx]
+                    if plate:
+                        tube.add_layers_any_color(plate)
+
+                        self.queue_plates[self.selected_queue_idx] = self.generate_random_plate()
+                        try:
+                            print("🔁 A correr merge_all_possible_layers()")
+                            self.game.merge_all_possible_layers()
+                            print("✅ Merge completo")
+                        except Exception as e:
+                            print("❌ ERRO DENTRO DO MERGE!")
+                            import traceback
+                            traceback.print_exc()
+                            return
+
+                        self.selected_queue_idx = None
+                        return
+
 
         # Do tabuleiro para outro tubo: move todas as fatias
         if self.selected_tube is not None:
             for idx, tube in enumerate(self.game.tubes):
                 if self.get_cell_rect(idx).collidepoint(pos) and idx != self.selected_tube:
                     self.game.move_all_layers(self.selected_tube, idx)
+                    self.game.merge_all_possible_layers()
+                    try:
+                        print("🔁 A correr merge_all_possible_layers()")
+                        self.game.merge_all_possible_layers()
+                        print("✅ Merge completo")
+                    except Exception as e:
+                            print("❌ ERRO DENTRO DO MERGE!")
+                            import traceback
+                            traceback.print_exc()
+                            return
+                    self.draw()  # força atualização imediata
+                    pygame.display.update()
                     self.selected_tube = None
                     return
             self.selected_tube = None

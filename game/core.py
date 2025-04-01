@@ -27,10 +27,17 @@ class Tube:
         return False
     
     def add_layers_any_color(self, layers: List[CakeLayer]):
-        """Adiciona várias camadas ao tubo sem verificar cores."""
         for layer in layers:
-            if len(self.layers) < self.max_capacity:
+            if layer and len(self.layers) < self.max_capacity:
                 self.layers.append(layer)
+
+    def clear_if_full_same_color(self) -> bool:
+        if len(self.layers) == self.max_capacity:
+            first_color = self.layers[0].color
+            if all(layer.color == first_color for layer in self.layers):
+                self.layers = []  # limpa todas as camadas
+                return True  # indica que limpou
+        return False
 
 
     def remove_layer(self, index: int) -> Optional[CakeLayer]:
@@ -135,22 +142,54 @@ class CakeGame:
             
         return adjacent
     
-    def merge_adjacent_layers(self, tube_idx: int):
-            main_tube = self.tubes[tube_idx]
-            if main_tube.is_full() or main_tube.is_empty():
-                return
+    def merge_all_possible_layers(self):
+        merge_happened = True
+        cycle_count = 0  # proteção contra ciclos infinitos
 
-            top_color = main_tube.top_layer().color
-            adjacent_idxs = self.get_adjacent_tubes(tube_idx)
+        while merge_happened:
+            merge_happened = False
+            cycle_count += 1
 
-            for adj_idx in adjacent_idxs:
-                adj_tube = self.tubes[adj_idx]
-                while not main_tube.is_full() and not adj_tube.is_empty():
-                    adj_top = adj_tube.top_layer()
-                    if adj_top.color == top_color:
-                        main_tube.add_layer(adj_tube.remove_layer(-1))
-                    else:
-                        break
+            if cycle_count > 100:
+                print("❌ Merge parou: ciclo infinito evitado!")
+                break
+
+            for idx, tube in enumerate(self.tubes):
+                for adj in self.get_adjacent_tubes(idx):
+                    if idx == adj:
+                        continue
+                    if self.try_merge_tubes(idx, adj):
+                        merge_happened = True
+                        self.tubes[idx].clear_if_full_same_color()
+                        self.tubes[adj].clear_if_full_same_color()
+        
+    def try_merge_tubes(self, target_idx: int, source_idx: int) -> bool:
+        target = self.tubes[target_idx]
+        source = self.tubes[source_idx]
+
+        if source.is_empty() or target.is_full():
+            return False
+
+        source_colors = {layer.color for layer in source.layers}
+        target_colors = {layer.color for layer in target.layers}
+
+        common_colors = source_colors.intersection(target_colors)
+        if not common_colors:
+            return False
+
+        moved = False
+        for color in common_colors:
+            color_layers = [l for l in source.layers if l.color == color]
+            if not color_layers:
+                continue
+            space = target.max_capacity - len(target.layers)
+            to_move = color_layers[:space]
+            for l in to_move:
+                target.add_layer(l)
+                source.layers.remove(l)
+                moved = True
+        return moved
+
 
     # ✅ Função nova para mover todas as fatias
     def move_all_layers(self, from_idx: int, to_idx: int) -> bool:
