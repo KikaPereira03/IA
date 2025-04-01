@@ -143,10 +143,12 @@ class CakeGame:
         return adjacent
     
     def merge_all_possible_layers(self):
+        print("🔁 A correr merge_all_possible_layers()")
         merge_happened = True
         cycle_count = 0  # proteção contra ciclos infinitos
 
         while merge_happened:
+            print("🔄 Novo ciclo de merge...")
             merge_happened = False
             cycle_count += 1
 
@@ -154,41 +156,95 @@ class CakeGame:
                 print("❌ Merge parou: ciclo infinito evitado!")
                 break
 
-            for idx, tube in enumerate(self.tubes):
-                for adj in self.get_adjacent_tubes(idx):
-                    if idx == adj:
+            for i, tube_a in enumerate(self.tubes):
+                for j in self.get_adjacent_tubes(i):
+                    if i == j:
                         continue
-                    if self.try_merge_tubes(idx, adj):
-                        merge_happened = True
-                        self.tubes[idx].clear_if_full_same_color()
-                        self.tubes[adj].clear_if_full_same_color()
-        
-    def try_merge_tubes(self, target_idx: int, source_idx: int) -> bool:
-        target = self.tubes[target_idx]
-        source = self.tubes[source_idx]
+                    tube_b = self.tubes[j]
 
-        if source.is_empty() or target.is_full():
+                    # Verifica se têm cores em comum, mesmo que não no topo
+                    colors_a = [layer.color for layer in tube_a.layers]
+                    colors_b = [layer.color for layer in tube_b.layers]
+                    common_colors = set(colors_a) & set(colors_b)
+
+                    for color in common_colors:
+                        # Junta todas as camadas dessa cor dos dois tubos
+                        layers_a = [l for l in tube_a.layers if l.color == color]
+                        layers_b = [l for l in tube_b.layers if l.color == color]
+                        total = layers_a + layers_b
+
+                        # Decide para onde mover
+                        if len(layers_a) >= len(layers_b):
+                            dest = tube_a
+                            src = tube_b
+                        else:
+                            dest = tube_b
+                            src = tube_a
+
+                        # Espaço disponível
+                        space = dest.max_capacity - len(dest.layers)
+                        to_add = total[:space]
+
+                        if to_add:
+                            # Remove as do src
+                            count = 0
+                            for layer in list(src.layers):
+                                if layer.color == color and count < len(to_add):
+                                    src.layers.remove(layer)
+                                    count += 1
+
+                            # Adiciona ao dest
+                            dest.layers.extend(to_add[:count])
+                            merge_happened = True
+
+        # Após merges, remove pratos completos
+        for tube in self.tubes:
+            if len(tube.layers) == 6 and all(l.color == tube.layers[0].color for l in tube.layers):
+                print(f"💥 Removido prato cheio de {tube.layers[0].color}")
+                if hasattr(self, 'ui_callback') and callable(self.ui_callback):
+                    self.ui_callback(self.tubes.index(tube))  # chama a animação
+                tube.layers.clear()
+    
+    def try_merge_tubes(self, idx1, idx2):
+        tube1 = self.tubes[idx1]
+        tube2 = self.tubes[idx2]
+
+        if tube1.is_empty() and tube2.is_empty():
             return False
 
-        source_colors = {layer.color for layer in source.layers}
-        target_colors = {layer.color for layer in target.layers}
+        # Agrupar todas as fatias por cor
+        all_layers = tube1.layers + tube2.layers
+        color_groups = {}
+        for layer in all_layers:
+            color_groups.setdefault(layer.color, []).append(layer)
 
-        common_colors = source_colors.intersection(target_colors)
-        if not common_colors:
+        # Ordenar as cores pela quantidade de fatias (maior primeiro)
+        sorted_colors = sorted(color_groups.items(), key=lambda x: len(x[1]), reverse=True)
+
+        # Distribuir pelas duas células
+        new_tube1 = []
+        new_tube2 = []
+
+        for color, layers in sorted_colors:
+            for layer in layers:
+                if len(new_tube1) < tube1.max_capacity:
+                    new_tube1.append(layer)
+                elif len(new_tube2) < tube2.max_capacity:
+                    new_tube2.append(layer)
+                else:
+                    # Não há espaço suficiente para reorganizar
+                    return False
+
+        # Só faz merge se algo mudar
+        if new_tube1 == tube1.layers and new_tube2 == tube2.layers:
             return False
 
-        moved = False
-        for color in common_colors:
-            color_layers = [l for l in source.layers if l.color == color]
-            if not color_layers:
-                continue
-            space = target.max_capacity - len(target.layers)
-            to_move = color_layers[:space]
-            for l in to_move:
-                target.add_layer(l)
-                source.layers.remove(l)
-                moved = True
-        return moved
+        # Aplicar a nova organização
+        tube1.layers = new_tube1
+        tube2.layers = new_tube2
+        return True
+
+
 
 
     # ✅ Função nova para mover todas as fatias

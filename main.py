@@ -15,6 +15,9 @@ class CakeGameUI:
         self.game = CakeGame(width, height)
         self.load_level(level_file)
         self.solver = GameSolver(self.game)
+        self.game.ui_callback = self.animate_disappearing_plate
+        
+
         
 
 
@@ -89,47 +92,38 @@ class CakeGameUI:
         return pygame.Rect(x, y, slot_width, slot_width)
 
     def draw_plate_with_layers(self, surface, center_x, center_y, layers):
-        pygame.draw.circle(surface, self.plate_color, (center_x, center_y), self.cake_radius)
-        pygame.draw.circle(surface, (200, 200, 200), (center_x, center_y), self.cake_radius, 2)
+    # Desenha o prato
+        pygame.draw.ellipse(surface, (255, 250, 240), (center_x - 42, center_y + 36, 84, 18))  # prato suave
 
         num_layers = len(layers)
-        total_height = num_layers * (self.layer_height + 2) - 2
-        base_y = center_y + total_height // 2 - self.layer_height // 2
+        total_height = num_layers * (self.layer_height + 6)
+        base_y = center_y + total_height // 2
 
         for i, layer in enumerate(layers):
-            layer_y = base_y - i * (self.layer_height + 2)
-            layer_radius = self.cake_radius * 0.75
+            layer_y = base_y - i * (self.layer_height + 6)
+            layer_width = self.cake_radius * 1.5
+            layer_height = self.layer_height + 2
+
+            # Obter cor da camada
             color = self.color_map.get(layer.color, (220, 220, 220))
+            shadow = tuple(max(0, c - 30) for c in color)
+            highlight = tuple(min(255, c + 50) for c in color)
 
-            # sombra de profundidade
-            shadow_color = tuple(max(0, c - 40) for c in color)
-            highlight_color = tuple(min(255, c + 40) for c in color)
+            # Base sombra (fundo da fatia)
+            shadow_rect = pygame.Rect(center_x - layer_width//2, layer_y + 2, layer_width, layer_height)
+            pygame.draw.ellipse(surface, shadow, shadow_rect)
 
-            # retângulo base da camada
-            layer_rect = pygame.Rect(
-                center_x - layer_radius,
-                layer_y - self.layer_height // 2,
-                layer_radius * 2,
-                self.layer_height
-            )
+            # Fatia principal
+            main_rect = pygame.Rect(center_x - layer_width//2, layer_y, layer_width, layer_height)
+            pygame.draw.ellipse(surface, color, main_rect)
 
-            # camada de fundo (sombra inferior)
-            shadow_rect = layer_rect.copy()
-            shadow_rect.move_ip(0, 2)
-            pygame.draw.ellipse(surface, shadow_color, shadow_rect)
+            # Glacê/brilho
+            icing_rect = main_rect.inflate(-layer_width * 0.4, -layer_height * 0.4)
+            icing_rect.move_ip(0, -1)
+            pygame.draw.ellipse(surface, highlight, icing_rect)
 
-            # camada principal (meio)
-            pygame.draw.ellipse(surface, color, layer_rect)
-
-            # camada de topo (luz superior)
-            top_rect = layer_rect.copy()
-            top_rect.inflate_ip(-layer_radius * 0.4, -self.layer_height * 0.4)
-            top_rect.move_ip(0, -1)
-            pygame.draw.ellipse(surface, highlight_color, top_rect)
-
-            # contorno final
-            pygame.draw.ellipse(surface, (50, 50, 50), layer_rect, 1)
-
+            # Contorno fino
+            pygame.draw.ellipse(surface, (80, 80, 80), main_rect, 1)
 
     def draw(self):
         self.screen.fill(self.bg_color)
@@ -220,6 +214,45 @@ class CakeGameUI:
                 if self.get_cell_rect(idx).collidepoint(pos) and tube.layers:
                     self.selected_tube = idx
                     return
+                
+                
+    def animate_disappearing_plate(self, tube_idx):
+        rect = self.get_cell_rect(tube_idx)
+        center_x, center_y = rect.center
+        original_layers = self.game.tubes[tube_idx].layers[:]
+
+        for scale in reversed(range(1, 11)):  # de 10 → 1 (shrinking)
+            self.draw()  # desenha normalmente
+            scaled_layers = []
+
+            for layer in original_layers:
+                # copiar e marcar visualmente como encolhendo
+                new_layer = CakeLayer(layer.color, layer.size)
+                scaled_layers.append(new_layer)
+
+            # desenhar as camadas com escala decrescente
+            shrink_radius = int(self.cake_radius * (scale / 10))
+            shrink_layer_height = int(self.layer_height * (scale / 10))
+
+            pygame.draw.circle(self.screen, self.plate_color, (center_x, center_y), shrink_radius)
+            num_layers = len(scaled_layers)
+            total_height = num_layers * (shrink_layer_height + 2) - 2
+            base_y = center_y + total_height // 2 - shrink_layer_height // 2
+
+            for i, layer in enumerate(scaled_layers):
+                layer_y = base_y - i * (shrink_layer_height + 2)
+                layer_rect = pygame.Rect(
+                    center_x - shrink_radius * 0.75,
+                    layer_y - shrink_layer_height // 2,
+                    shrink_radius * 1.5,
+                    shrink_layer_height
+                )
+                color = self.color_map.get(layer.color, (200, 200, 200))
+                pygame.draw.ellipse(self.screen, color, layer_rect)
+
+            pygame.display.update()
+            pygame.time.delay(30)  # controla a velocidade da animação
+
 
     def run(self):
         running = True
