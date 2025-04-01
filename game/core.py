@@ -26,6 +26,13 @@ class Tube:
             return True
         return False
     
+    def add_layers_any_color(self, layers: List[CakeLayer]):
+        """Adiciona várias camadas ao tubo sem verificar cores."""
+        for layer in layers:
+            if len(self.layers) < self.max_capacity:
+                self.layers.append(layer)
+
+
     def remove_layer(self, index: int) -> Optional[CakeLayer]:
         if 0 <= index < len(self.layers):
             return self.layers.pop(index)

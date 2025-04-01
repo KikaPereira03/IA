@@ -134,8 +134,7 @@ class CakeGameUI:
         if self.selected_queue_idx is not None:
             for idx, tube in enumerate(self.game.tubes):
                 if self.get_cell_rect(idx).collidepoint(pos) and not tube.is_full() and tube.is_empty():
-                    for layer in self.queue_plates[self.selected_queue_idx]:
-                        tube.add_layer(layer)
+                    tube.add_layers_any_color(self.queue_plates[self.selected_queue_idx])
                     self.queue_plates[self.selected_queue_idx] = self.generate_random_plate()
                     self.selected_queue_idx = None
                     return
