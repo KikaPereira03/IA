@@ -175,9 +175,9 @@ class CakeMenuUI:
 
             if action == 'start_game':
                 level_file = f"game/levels/level{self.selected_level + 1}.txt"
-                game_ui = self.game_ui_class()
-                game_ui.load_level(level_file)
+                game_ui = self.game_ui_class(level_file=level_file)
                 game_ui.run()
+
 
                 pygame.display.set_mode((self.screen_width, self.screen_height))
                 pygame.display.set_caption("Cake Sort Puzzle - Menu")

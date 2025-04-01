@@ -6,9 +6,11 @@ from game.core import CakeGame, CakeLayer
 from game.solver import GameSolver
 
 class CakeGameUI:
-    def __init__(self, width: int = 4, height: int = 5):
+    def __init__(self, level_file="game/levels/level1.txt", width: int = 4, height: int = 5):
         pygame.init()
+        self.queue_slots = 3
         self.game = CakeGame(width, height)
+        self.load_level(level_file)
         self.solver = GameSolver(self.game)
 
         self.screen_width = 1000
@@ -114,6 +116,13 @@ class CakeGameUI:
         self.screen.blit(title, (self.screen_width // 2 - title.get_width() // 2, 20))
 
         pygame.display.flip()
+
+    def load_level(self, filename: str):
+        """Carrega um nível e reinicia o estado do jogo"""
+        self.game.initialize_level(filename)
+        self.selected_tube = None
+        self.selected_queue_idx = None
+        self.queue_plates = [self.generate_random_plate() for _ in range(self.queue_slots)]
 
     def handle_click(self, pos):
         for idx, plate in enumerate(self.queue_plates):
