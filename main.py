@@ -18,8 +18,6 @@ class CakeGameUI:
         self.game.ui_callback = self.animate_disappearing_plate
         
 
-        
-
 
         self.screen_width = 1000
         self.screen_height = 800
@@ -150,7 +148,20 @@ class CakeGameUI:
         title = self.big_font.render("Cake Sort Puzzle", True, self.text_color)
         self.screen.blit(title, (self.screen_width // 2 - title.get_width() // 2, 20))
 
+        self.draw_scoreboard()
         pygame.display.flip()
+
+    def draw_scoreboard(self):
+        font = pygame.font.SysFont("Arial", 32)
+
+        # Título
+        title = font.render("SCOREBOARD", True, (50, 50, 50))
+        self.screen.blit(title, (700, 100))  # ajusta posição conforme teu layout
+
+        # Pontuação atual
+        score_text = font.render(f"Score: {self.game.score}", True, (255, 100, 100))
+        self.screen.blit(score_text, (700, 150))
+
 
     def load_level(self, filename: str):
         """Carrega um nível e reinicia o estado do jogo"""

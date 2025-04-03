@@ -1,5 +1,7 @@
 import pygame
 from typing import List, Tuple, Optional
+from game.utils import load_level_and_scoreboard
+from game.utils import save_score_in_level_file
 from dataclasses import dataclass
 import os
 
@@ -73,30 +75,33 @@ class CakeGame:
         self.moves = 0
         self.selected_tube = None
         self.selected_layer_pos = None
+        self.score = 0
     
     def initialize_level(self, level_file: str):
+        self.level_number = int(level_file.replace("game/levels/level", "").replace(".txt", ""))
         self.tubes = [Tube(self.max_capacity) for _ in range(self.width * self.height)]
         self.moves = 0
         
         try:
-            with open(level_file, 'r') as f:
-                for line in f:
-                    if line.startswith('#') or not line.strip():
+            grid_lines, self.scoreboard = load_level_and_scoreboard(level_file.replace(".txt", "").replace("level", "lvl"))
+
+            for line in grid_lines:
+                if line.startswith('#') or not line.strip():
+                    continue
+
+                parts = line.strip().split(':')
+                if len(parts) < 2:
+                    continue
+
+                tube_idx, layers_str = parts[0], parts[1]
+                tube = self.tubes[int(tube_idx)]
+
+                for layer_str in layers_str.split():
+                    if not layer_str:
                         continue
-                    
-                    parts = line.strip().split(':')
-                    if len(parts) < 2:
-                        continue
-                        
-                    tube_idx, layers_str = parts[0], parts[1]
-                    tube = self.tubes[int(tube_idx)]
-                    
-                    for layer_str in layers_str.split():
-                        if not layer_str:
-                            continue
-                        color = layer_str[0].upper()
-                        size = int(layer_str[1:]) if len(layer_str) > 1 else 1
-                        tube.add_layer(CakeLayer(color, size))
+                    color = layer_str[0].upper()
+                    size = int(layer_str[1:]) if len(layer_str) > 1 else 1
+                    tube.add_layer(CakeLayer(color, size))
         except FileNotFoundError:
             print(f"Error: Level file {level_file} not found")
     
@@ -201,9 +206,27 @@ class CakeGame:
         for tube in self.tubes:
             if len(tube.layers) == 6 and all(l.color == tube.layers[0].color for l in tube.layers):
                 print(f"💥 Removido prato cheio de {tube.layers[0].color}")
+
+                # ✅ Adiciona 100 pontos e guarda imediatamente no ficheiro
+                if hasattr(self, 'score'):
+                    self.score += 100
+                else:
+                    self.score = 100
+
+                from game.utils import save_score_in_level_file
+                level = int(self.level_number) if hasattr(self, 'level_number') else 1
+                save_score_in_level_file(level, ("Tropa", self.score))
+
+                # Animação
                 if hasattr(self, 'ui_callback') and callable(self.ui_callback):
-                    self.ui_callback(self.tubes.index(tube))  # chama a animação
+                    self.ui_callback(self.tubes.index(tube))
                 tube.layers.clear()
+
+                # ✅ Podes deixar este print, mas sem guardar novamente
+                if self.is_solved():
+                    print("✅ Puzzle resolvido!")
+
+
     
     def try_merge_tubes(self, idx1, idx2):
         tube1 = self.tubes[idx1]

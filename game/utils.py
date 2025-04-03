@@ -33,3 +33,59 @@ def create_gradient(width: int, height: int,
         b = int(start_color[2] + (end_color[2] - start_color[2]) * ratio)
         pygame.draw.line(gradient, (r, g, b), (0, y), (width, y))
     return gradient
+
+def load_level_and_scoreboard(level):
+    filename = f"game/levels/level{level}.txt" 
+    grid = []
+    scoreboard = []
+    reading_scoreboard = False
+    try:
+        with open(filename, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith("# SCOREBOARD"):
+                    reading_scoreboard = True
+                    continue
+                if reading_scoreboard:
+                    parts = line.split()
+                    if len(parts) == 2:
+                        name, score = parts[0], int(parts[1])
+                        scoreboard.append((name, score))
+                else:
+                    grid.append(line)
+    except FileNotFoundError:
+        pass
+    return grid, scoreboard
+
+def save_score_in_level_file(level, new_entry):
+    filename = f"game/levels/level{level}.txt"
+    grid, scoreboard = load_level_and_scoreboard(level)
+
+    name, score = new_entry
+
+    # 🔁 Verifica se o jogador já está no scoreboard
+    updated = False
+    for i, (existing_name, existing_score) in enumerate(scoreboard):
+        if existing_name == name:
+            if score > existing_score:
+                scoreboard[i] = (name, score)  # atualiza se for maior
+            updated = True
+            break
+
+    if not updated:
+        scoreboard.append((name, score))
+
+    # 🔽 Ordena por score decrescente
+    scoreboard.sort(key=lambda x: x[1], reverse=True)
+
+    # 💾 Reescreve o ficheiro todo
+    with open(filename, "w") as f:
+        for line in grid:
+            f.write(f"{line}\n")
+        f.write("\n# SCOREBOARD\n")
+        for name, score in scoreboard:
+            f.write(f"{name} {score}\n")
+
+
