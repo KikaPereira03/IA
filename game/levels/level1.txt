@@ -20,4 +20,8 @@
 19:
 
 # SCOREBOARD
-Tropa 400
+Tropa 200
+Chico 200
+joao 200
+lol 200
+chico12 200

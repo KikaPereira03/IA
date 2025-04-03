@@ -3,6 +3,8 @@ from typing import List, Tuple, Dict, Optional
 import heapq
 import time
 from collections import deque
+from game.core import CakeLayer
+
 
 class GameSolver:
     def __init__(self, game: CakeGame):

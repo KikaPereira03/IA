@@ -166,6 +166,68 @@ class CakeMenuUI:
                     return False, 'start_game'
 
         return True, None
+    
+    def ask_player_name(self):
+        input_active = True
+        name = ""
+        clock = pygame.time.Clock()
+
+        while input_active:
+            self.screen.fill((30, 30, 30))  # fundo escuro
+
+            # caixa arredondada no centro
+            box_width, box_height = 500, 250
+            box_rect = pygame.Rect(
+                (self.screen.get_width() - box_width) // 2,
+                (self.screen.get_height() - box_height) // 2,
+                box_width,
+                box_height
+            )
+            pygame.draw.rect(self.screen, (245, 245, 255), box_rect, border_radius=25)
+            pygame.draw.rect(self.screen, (180, 180, 220), box_rect, 4, border_radius=25)
+
+            # título
+            title_font = pygame.font.SysFont("Arial", 38, bold=True)
+            title = title_font.render("Qual é o teu nome?", True, (60, 60, 100))
+            self.screen.blit(title, (self.screen.get_width() // 2 - title.get_width() // 2, box_rect.top + 30))
+
+            # input com borda
+            input_rect = pygame.Rect(
+                self.screen.get_width() // 2 - 150,
+                box_rect.top + 100,
+                300,
+                40
+            )
+            pygame.draw.rect(self.screen, (255, 255, 255), input_rect, border_radius=10)
+            pygame.draw.rect(self.screen, (150, 150, 200), input_rect, 2, border_radius=10)
+
+            font = pygame.font.SysFont("Arial", 28)
+            name_surface = font.render(name + "|", True, (80, 80, 120))
+            self.screen.blit(name_surface, (input_rect.x + 10, input_rect.y + 5))
+
+            # instrução
+            instruction = font.render("Enter para confirmar", True, (120, 120, 140))
+            self.screen.blit(instruction, (self.screen.get_width() // 2 - instruction.get_width() // 2, box_rect.bottom - 50))
+
+            pygame.display.flip()
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN and name.strip():
+                        input_active = False
+                    elif event.key == pygame.K_BACKSPACE:
+                        name = name[:-1]
+                    elif len(name) < 12 and event.unicode.isprintable():
+                        name += event.unicode
+
+            clock.tick(30)
+
+        return name.strip()
+
+
 
     def run(self):
         running = True
@@ -175,8 +237,10 @@ class CakeMenuUI:
 
             if action == 'start_game':
                 level_file = f"game/levels/level{self.selected_level + 1}.txt"
-                game_ui = self.game_ui_class(level_file=level_file)
+                player_name = self.ask_player_name()  # 👈 pede o nome
+                game_ui = self.game_ui_class(level_file=level_file, player_name=player_name)
                 game_ui.run()
+
 
 
                 pygame.display.set_mode((self.screen_width, self.screen_height))

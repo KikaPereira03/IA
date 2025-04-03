@@ -76,6 +76,8 @@ class CakeGame:
         self.selected_tube = None
         self.selected_layer_pos = None
         self.score = 0
+        self.base_score = 0  
+
     
     def initialize_level(self, level_file: str):
         self.level_number = int(level_file.replace("game/levels/level", "").replace(".txt", ""))
@@ -210,12 +212,21 @@ class CakeGame:
                 # ✅ Adiciona 100 pontos e guarda imediatamente no ficheiro
                 if hasattr(self, 'score'):
                     self.score += 100
+                    if (self.score - self.base_score) >= 200 and self.level_number < 3:
+                        next_level = self.level_number + 1
+                        print(f"🎯 Score chegou a {self.score}! A mudar para o nível {next_level}")
+                        self.ui_level_switch(next_level)
+
                 else:
                     self.score = 100
 
-                from game.utils import save_score_in_level_file
+                print(f"💾 A guardar score no nível {self.level_number} para {getattr(self, 'player_name', 'Tropa')} com {self.score} pontos")
+                
                 level = int(self.level_number) if hasattr(self, 'level_number') else 1
-                save_score_in_level_file(level, ("Tropa", self.score))
+                if hasattr(self, "player_name"):
+                    save_score_in_level_file(level, (self.player_name, self.score))
+                else:
+                    save_score_in_level_file(level, ("Tropa", self.score))
 
                 # Animação
                 if hasattr(self, 'ui_callback') and callable(self.ui_callback):

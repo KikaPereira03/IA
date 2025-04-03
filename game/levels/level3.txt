@@ -18,3 +18,7 @@
 17:
 18:
 19:
+
+# SCOREBOARD
+Tropa 700
+chico12 500

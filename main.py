@@ -2,20 +2,27 @@ import pygame
 import sys
 import time
 import random
+import os
 
 from typing import List, Tuple, Optional
 from game.core import CakeGame, CakeLayer
 from game.solver import GameSolver
 
 class CakeGameUI:
-    def __init__(self, level_file="game/levels/level1.txt", width: int = 4, height: int = 5, max_capacity = 6):
+    def __init__(self, level_file="game/levels/level1.txt", width: int = 4, height: int = 5, max_capacity=6, player_name="Tropa"):
         pygame.init()
         self.level_file = level_file  # guarda o nome do nível atual
         self.queue_slots = 3
         self.game = CakeGame(width, height)
+        self.game.ui_level_switch = self.change_level
         self.load_level(level_file)
         self.solver = GameSolver(self.game)
         self.game.ui_callback = self.animate_disappearing_plate
+        self.player_name = player_name
+        self.game.player_name = player_name 
+
+    
+
         
 
 
@@ -263,6 +270,85 @@ class CakeGameUI:
 
             pygame.display.update()
             pygame.time.delay(30)  # controla a velocidade da animação
+
+    def change_level(self, level_number: int):
+        print(f"🔁 A mudar para o level {level_number}")
+        self.level_file = f"game/levels/level{level_number}.txt"
+
+        if not os.path.exists(self.level_file):
+            print(f"🚫 O nível {level_number} não existe.")
+            return
+
+        current_score = self.game.score  
+
+        self.show_level_popup(level_number)
+
+        self.game = CakeGame(self.game.width, self.game.height)
+        self.game.score = current_score
+        self.game.base_score = current_score
+        self.game.player_name = self.player_name  
+
+        self.game.ui_callback = self.animate_disappearing_plate
+        self.game.ui_level_switch = self.change_level
+        self.game.initialize_level(self.level_file)
+
+        self.queue_plates = [self.generate_random_plate() for _ in range(self.queue_slots)]
+        self.selected_queue_idx = None
+        self.selected_tube = None
+
+
+    def show_level_popup(self, level_number):
+        popup_running = True
+        overlay = pygame.Surface((self.screen_width, self.screen_height))
+        overlay.set_alpha(180)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+
+        # Caixa central arredondada
+        box_width, box_height = 500, 300
+        box_rect = pygame.Rect(
+            (self.screen_width - box_width) // 2,
+            (self.screen_height - box_height) // 2,
+            box_width,
+            box_height
+        )
+        pygame.draw.rect(self.screen, (245, 245, 255), box_rect, border_radius=25)
+        pygame.draw.rect(self.screen, (180, 180, 220), box_rect, 4, border_radius=25)
+
+        # Título decorativo
+        title_font = pygame.font.SysFont("Arial", 48, bold=True)
+        title = title_font.render(f"NÍVEL {level_number}", True, (80, 60, 150))
+        self.screen.blit(title, (self.screen_width//2 - title.get_width()//2, box_rect.top + 30))
+
+        # Subtítulo
+        subtitle = self.font.render("LEVEL COMPLETE!", True, (100, 100, 120))
+        self.screen.blit(subtitle, (self.screen_width//2 - subtitle.get_width()//2, box_rect.top + 90))
+
+        # Instrução
+        instruction = self.font.render("Clique ou prima qualquer tecla para continuar", True, (120, 120, 140))
+        self.screen.blit(instruction, (self.screen_width//2 - instruction.get_width()//2, box_rect.top + 130))
+
+        # Botão (fake)
+        button_rect = pygame.Rect(
+            self.screen_width//2 - 100,
+            box_rect.bottom - 70,
+            200,
+            40
+        )
+        pygame.draw.rect(self.screen, (120, 220, 120), button_rect, border_radius=20)
+        button_text = self.font.render("NEXT LEVEL", True, (255, 255, 255))
+        self.screen.blit(button_text, (button_rect.centerx - button_text.get_width()//2, button_rect.centery - button_text.get_height()//2))
+
+        pygame.display.flip()
+
+        while popup_running:
+            for event in pygame.event.get():
+                if event.type in [pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN]:
+                    popup_running = False
+                elif event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
 
 
     def run(self):
