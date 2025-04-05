@@ -12,6 +12,7 @@ class CakeGameUI:
         pygame.init()
         self.level_file = level_file
         self.queue_slots = 3
+        self.queue_pointer = self.queue_slots
         self.game = CakeGame(width, height)
         self.game.ui_level_switch = self.change_level
         self.load_level(level_file)
@@ -119,10 +120,12 @@ class CakeGameUI:
             slot_rect = self.get_queue_slot_rect(idx)
             pygame.draw.rect(self.screen, self.grid_color, slot_rect, 0, 15)
             pygame.draw.rect(self.screen, self.grid_border_color, slot_rect, 2, 15)
+
             if idx == self.selected_queue_idx:
                 highlight = pygame.Surface((slot_rect.width, slot_rect.height), pygame.SRCALPHA)
                 highlight.fill(self.selected_color)
                 self.screen.blit(highlight, slot_rect.topleft)
+
             if plate:
                 cx, cy = slot_rect.center
                 self.draw_plate_with_slices(self.screen, cx, cy, plate)
@@ -130,7 +133,6 @@ class CakeGameUI:
         title = self.big_font.render("Cake Sort Puzzle", True, self.text_color)
         self.screen.blit(title, (self.screen_width // 2 - title.get_width() // 2, 20))
 
-        self.draw_scoreboard()
         pygame.display.flip()
 
     # Draw the scoreboard text
@@ -155,49 +157,42 @@ class CakeGameUI:
 
     # Handle all mouse click actions
     def handle_click(self, pos):
+        # Step 1: Handle click on queue plates
         for idx, plate in enumerate(self.queue_plates):
             if self.get_queue_slot_rect(idx).collidepoint(pos):
                 if plate:
                     self.selected_queue_idx = idx
                     return
 
+        # Step 2: If a queue plate is selected, handle click on board plate
         if self.selected_queue_idx is not None:
             for idx, board_plate in enumerate(self.game.plates):
-                if self.get_cell_rect(idx).collidepoint(pos) and not board_plate.is_full() and board_plate.is_empty():
-                    selected_slices = self.queue_plates[self.selected_queue_idx]
+                if self.get_cell_rect(idx).collidepoint(pos) and len(board_plate.slices) == 0:
+                    selected_slices = list(self.queue_plates[self.selected_queue_idx])
                     if selected_slices:
                         board_plate.slices.extend(selected_slices)
-                        self.queue_plates[self.selected_queue_idx] = None
-                        try:
-                            self.game.merge_all_possible_slices()
-                        except Exception:
-                            import traceback
-                            traceback.print_exc()
-                            return
+
+                        if self.queue_pointer < len(self.game.queue_data):
+                            next_plate = self.game.queue_data[self.queue_pointer]
+                            self.queue_plates[self.selected_queue_idx] = [
+                                CakeSlice(color, 1) for color in reversed(next_plate)
+                            ]
+                            self.queue_pointer += 1
+                        else:
+                            self.queue_plates[self.selected_queue_idx] = None
+
                         self.selected_queue_idx = None
                         return
 
-        if self.selected_plate is not None:
-            for idx, plate in enumerate(self.game.plates):
-                if self.get_cell_rect(idx).collidepoint(pos) and idx != self.selected_plate:
-                    self.game.move_all_slices(self.selected_plate, idx)
-                    try:
-                        self.game.merge_all_possible_slices()
-                    except Exception:
-                        import traceback
-                        traceback.print_exc()
-                        return
-                    self.draw()
-                    pygame.display.update()
-                    self.selected_plate = None
-                    return
-            self.selected_plate = None
+            # If clicked somewhere invalid, deselect queue plate
+            self.selected_queue_idx = None
+            return
 
-        else:
-            for idx, plate in enumerate(self.game.plates):
-                if self.get_cell_rect(idx).collidepoint(pos) and plate.slices:
-                    self.selected_plate = idx
-                    return
+        # Step 3: Select a plate on the grid (used later for other interactions)
+        for idx, plate in enumerate(self.game.plates):
+            if self.get_cell_rect(idx).collidepoint(pos) and plate.slices:
+                self.selected_plate = idx
+                return
 
     # Animate a plate shrinking visually
     def animate_disappearing_plate(self, plate_idx):
@@ -230,11 +225,9 @@ class CakeGameUI:
         self.level_file = f"game/levels/level{level_number}.txt"
         if not os.path.exists(self.level_file):
             return
-        current_score = self.game.score
+        
         self.show_level_popup(level_number)
         self.game = CakeGame(self.game.width, self.game.height)
-        self.game.score = current_score
-        self.game.base_score = current_score
         self.game.player_name = self.player_name
         self.game.ui_callback = self.animate_disappearing_plate
         self.game.ui_level_switch = self.change_level

@@ -1,10 +1,10 @@
 import pygame
 from typing import List, Tuple, Optional
 from game.utils import load_level_file
+from game.utils import save_score_in_level_file
 from dataclasses import dataclass
 import os
 
-# Represents a slice of cake with color and size
 @dataclass
 class CakeSlice:
     color: str
@@ -13,7 +13,6 @@ class CakeSlice:
     def __str__(self):
         return f"{self.color}{self.size}"
 
-# Represents a plate that holds cake slices
 class Plate:
     def __init__(self, max_capacity: int = 6):
         self.slices: List[CakeSlice] = []
@@ -22,7 +21,6 @@ class Plate:
     def __str__(self):
         return " ".join(str(layer) for layer in self.slices)
 
-# Main game class
 class CakeGame:
     def __init__(self, width: int = 5, height: int = 4, max_capacity: int = 6):
         self.width = width
@@ -35,7 +33,7 @@ class CakeGame:
         self.score = 0
         self.base_score = 0  
 
-    # Load initial game state and queue from level file
+    
     def initialize_level(self, level_file: str):
         self.plates = [Plate(self.max_capacity) for _ in range(self.width * self.height)]
         self.moves = 0
@@ -56,7 +54,7 @@ class CakeGame:
                     continue
 
                 if reading_queue:
-                    if ':' in line:
+                    if ':' in line:  # likely start of scoreboard
                         break
                     self.queue_data.append(list(line.strip()))
                     continue
@@ -78,23 +76,22 @@ class CakeGame:
         except FileNotFoundError:
             print(f"Error: Level file {level_file} not found")
 
-    # Create a hash of the game board state
+    
     def get_state_hash(self) -> str:
         return "|".join(str(plate) for plate in self.plates)
-
-    # Get indices of adjacent plates
-    def get_adjacent_plates(self, plate_idx: int) -> List[int]:
-        row = plate_idx // self.width
-        col = plate_idx % self.width
-        adjacent = []
-
+    
+    def get_adjacent_plates(self, idx: int) -> List[int]:
+        row = idx // self.width
+        col = idx % self.width
+        neighbors = []
         if row > 0:
-            adjacent.append(plate_idx - self.width)
+            neighbors.append(idx - self.width)  # Up
         if row < self.height - 1:
-            adjacent.append(plate_idx + self.width)
+            neighbors.append(idx + self.width)  # Down
         if col > 0:
-            adjacent.append(plate_idx - 1)
+            neighbors.append(idx - 1)  # Left
         if col < self.width - 1:
-            adjacent.append(plate_idx + 1)
+            neighbors.append(idx + 1)  # Right
+        return neighbors
 
-        return adjacent
+    
