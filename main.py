@@ -332,7 +332,6 @@ class CakeGameUI:
     # Switch to a different level
     def change_level(self, level_number: int):
         self.level_file = f"game/levels/level{level_number}.txt"
-        print(f"Attempting to load level: {self.level_file}")
         
         if not os.path.exists(self.level_file):
             print(f"Level file {self.level_file} does not exist!")
