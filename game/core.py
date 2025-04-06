@@ -80,6 +80,9 @@ class CakeGame:
     def get_state_hash(self) -> str:
         return "|".join(str(plate) for plate in self.plates)
     
+    def sort_plate_by_color(self, plate):
+        plate.slices.sort(key=lambda slice: slice.color)
+    
     def get_adjacent_plates(self, idx: int) -> List[int]:
         row = idx // self.width
         col = idx % self.width
@@ -328,6 +331,10 @@ class CakeGame:
         # Check for completions
         self._check_plate_completion(from_idx)
         self._check_plate_completion(to_idx)
+
+        self.sort_plate_by_color(self.plates[from_idx])
+        self.sort_plate_by_color(self.plates[to_idx])
+
         
         return moved
     def _move_minority_color(self, plate_idx, color):
