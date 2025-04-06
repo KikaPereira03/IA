@@ -32,7 +32,7 @@ class CakeGame:
         self.score = 0
         self.base_score = 0  
 
-    
+            
     def initialize_level(self, level_file: str):
         self.plates = [Plate(self.max_capacity) for _ in range(self.width * self.height)]
         self.moves = 0
@@ -49,7 +49,9 @@ class CakeGame:
                     continue
 
                 if line.lower().startswith("score:"):
+                    # Ensure the required_score is loaded properly for each level
                     self.required_score = int(line.split(":")[1].strip())
+                    print(f"Required score for this level: {self.required_score}")  # Debug print to confirm loading
                     continue
 
                 if line.lower().startswith("queue:"):
@@ -78,6 +80,7 @@ class CakeGame:
 
         except FileNotFoundError:
             print(f"Error: Level file {level_file} not found")
+
 
     
     def get_state_hash(self) -> str:

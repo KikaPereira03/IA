@@ -1,5 +1,5 @@
 # SCORE
-score: 1100
+score: 100
 # QUEUE
 queue:
 GGR

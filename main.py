@@ -109,11 +109,14 @@ class CakeGameUI:
             pygame.draw.ellipse(surface, (80, 80, 80), main_rect, 1)
 
     def draw_score_bar(self):
-        bar_width, bar_height = 220, 18  # smaller, sleek bar
-        bar_x = self.screen_width // 2 - bar_width // 2  # center it horizontally
-        bar_y = 110  # just below the title
+        bar_width, bar_height = 220, 18
+        bar_x = self.screen_width // 2 - bar_width // 2
+        bar_y = 110
 
-        progress = min(self.game.score / self.game.required_score, 1.0)
+        # Get required score with a safe default
+        required_score = getattr(self.game, 'required_score', 100)
+        
+        progress = min(self.game.score / required_score, 1.0)
 
         # Background
         pygame.draw.rect(self.screen, (210, 210, 250), (bar_x, bar_y, bar_width, bar_height), border_radius=10)
@@ -125,9 +128,8 @@ class CakeGameUI:
 
         # Text above the bar
         self.score_font = pygame.font.SysFont("Arial", 16)
-        score_text = self.score_font.render(f"{self.game.score} / {self.game.required_score}", True, (70, 70, 70))
+        score_text = self.score_font.render(f"{self.game.score} / {required_score}", True, (70, 70, 70))
         self.screen.blit(score_text, (self.screen_width // 2 - score_text.get_width() // 2, bar_y - 26))
-
 
 
     # Draw the entire screen
@@ -173,8 +175,15 @@ class CakeGameUI:
         self.selected_plate = None
 
     def check_level_completion(self):
+        # Debugging: Check the state of the game
+        print(f"Checking level completion: Goal state: {self.game.is_goal_state()}, Score: {self.game.score}, Required Score: {self.game.required_score}")
+        
         if self.game.is_goal_state() and self.game.score >= self.game.required_score:
-            self.show_level_popup(self.current_level_number)
+            print(f"Level {self.current_level_number} completed. Transitioning to next level.")  # Debug print
+            self.current_level_number += 1  # Increment level number to move to the next level
+            self.change_level(self.current_level_number)  # Ensure that level transition occurs only after completion
+
+
             
     # Handle all mouse click actions
     def handle_click(self, pos):
@@ -254,22 +263,43 @@ class CakeGameUI:
         if match:
             return int(match.group(1))
         return 1  # fallback default
-
+    
 
     def change_level(self, level_number: int):
+        # Ensure the level file exists before attempting to load it
         self.level_file = f"game/levels/level{level_number}.txt"
+        print(f"Attempting to load level: {self.level_file}")
+        
         if not os.path.exists(self.level_file):
-            print(f"Level file {self.level_file} not found.")
-            return
-
+            print(f"Level file {self.level_file} does not exist!")
+            return  # Simply return if the level doesn't exist
+        
+        print(f"Loading level {level_number}...")
+        
+        # Set the current level number first
         self.current_level_number = level_number
+        
+        # Show the level popup before creating the new game
+        self.show_level_popup(level_number)
+        
+        # Create a new game with the new level
         self.game = CakeGame(self.game.width, self.game.height)
         self.game.ui_callback = self.animate_disappearing_plate
         self.game.ui_level_switch = self.change_level
         self.game.initialize_level(self.level_file)
+        
+        # Reset UI state
         self.selected_queue_idx = None
         self.selected_plate = None
-
+        self.queue_pointer = self.queue_slots
+        
+        # Set up queue plates based on the new game
+        self.queue_plates = [
+            [CakeSlice(color, 1) for color in reversed(plate)]
+            for plate in self.game.queue_data[:self.queue_slots]
+        ]
+        
+        print(f"Level {level_number} loaded successfully")
 
 
     # Show popup UI when a level is complete
@@ -293,7 +323,7 @@ class CakeGameUI:
         title_font = pygame.font.SysFont("Arial", 48, bold=True)
 
         # Title
-        title = title_font.render(f"NÍVEL {level_number}", True, (80, 60, 150))
+        title = title_font.render(f"LEVEL {level_number}", True, (80, 60, 150))
         self.screen.blit(title, (self.screen_width//2 - title.get_width()//2, box_rect.top + 20))
 
         # Subtitle
@@ -315,9 +345,6 @@ class CakeGameUI:
                 elif event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
-
-        self.current_level_number += 1
-        self.change_level(self.current_level_number)
 
     # Run the game loop
     def run(self):
