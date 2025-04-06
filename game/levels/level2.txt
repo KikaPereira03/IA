@@ -1,5 +1,5 @@
 #SCORE
-score: 100
+score: 1100
 # QUEUE
 queue:
 RBB

@@ -6,7 +6,7 @@ import os
 
 @dataclass
 class CakeSlice:
-    color: str
+    color: str # Color identifier (e.g. 'R', 'G', 'B')
     size: int
 
     def __str__(self):
@@ -15,12 +15,13 @@ class CakeSlice:
 class Plate:
     def __init__(self, max_capacity: int = 6):
         self.slices: List[CakeSlice] = []
-        self.max_capacity = max_capacity
+        self.max_capacity = max_capacity 
 
     def __str__(self):
         return " ".join(str(layer) for layer in self.slices)
 
 class CakeGame:
+    # Core game logic
     def __init__(self, width: int = 5, height: int = 4, max_capacity: int = 6):
         self.width = width
         self.height = height
@@ -32,7 +33,8 @@ class CakeGame:
         self.score = 0
         self.base_score = 0  
 
-            
+
+    # Load level from file: plates, queue, score requirement
     def initialize_level(self, level_file: str):
         self.plates = [Plate(self.max_capacity) for _ in range(self.width * self.height)]
         self.moves = 0
@@ -49,9 +51,7 @@ class CakeGame:
                     continue
 
                 if line.lower().startswith("score:"):
-                    # Ensure the required_score is loaded properly for each level
                     self.required_score = int(line.split(":")[1].strip())
-                    print(f"Required score for this level: {self.required_score}")  # Debug print to confirm loading
                     continue
 
                 if line.lower().startswith("queue:"):
@@ -81,7 +81,6 @@ class CakeGame:
         except FileNotFoundError:
             print(f"Error: Level file {level_file} not found")
 
-
     
     def get_state_hash(self) -> str:
         return "|".join(str(plate) for plate in self.plates)
@@ -89,6 +88,8 @@ class CakeGame:
     def sort_plate_by_color(self, plate):
         plate.slices.sort(key=lambda slice: slice.color)
     
+
+    # Get indexes of plates adjacent to the given plate
     def get_adjacent_plates(self, idx: int) -> List[int]:
         row = idx // self.width
         col = idx % self.width
@@ -102,58 +103,32 @@ class CakeGame:
         if col < self.width - 1:
             neighbors.append(idx + 1)  # Right
         return neighbors
-    
-    def get_top_group(self, plate):
-        if not plate.slices:
-            return []
-        top_color = plate.slices[-1].color
-        group = []
-        for s in reversed(plate.slices):
-            if s.color == top_color:
-                group.append(s)
-            else:
-                break
-        return list(reversed(group))
 
-    def is_valid_transfer(self, from_plate, to_plate, group):
-        if not group:
-            return False
-        if len(to_plate.slices) + len(group) > to_plate.max_capacity:
-            return False
-        if not to_plate.slices:
-            return True
-        return to_plate.slices[-1].color == group[0].color
-    
-    def move_slices(self, from_idx, to_idx, count):
-        group = self.plates[from_idx].slices[-count:]
-        self.plates[to_idx].slices.extend(group)
-        del self.plates[from_idx].slices[-count:]
 
     def is_goal_state(self):
-        for plate in self.plates:
+        for idx, plate in enumerate(self.plates):
             if not plate.slices:
-                continue
+                continue  
+                
             first_color = plate.slices[0].color
             if any(s.color != first_color for s in plate.slices):
                 return False
+                
         return True
 
-    def get_state_hash(self):
-        return "|".join(".".join(s.color for s in plate.slices) for plate in self.plates)
 
+    # Specialized greedy algorithm designed for the specific mechanics of our cake sort game.
+
+    # Main algorithm to consolidate same-colored slices
+    # 1. Find common colors between adjacent plates
+    # 2. Merge colors to prioritize consolidation
+    # 3. Handle mixed plates by moving minority colors
     def merge_all_possible_slices(self):
-        """
-        Automatically merge cake slices between adjacent plates.
-        First checks adjacency, then consolidates colors between adjacent plates.
-        """
         from collections import Counter
-        
-        # Track whether any merges occurred
+    
         merges_occurred = False
         
-        # Process until no more merges are possible
         while True:
-            # Flag to track if any merges happened in this iteration
             merged_this_round = False
             
             # PHASE 1: Check all adjacent plate pairs for color consolidation
@@ -169,7 +144,6 @@ class CakeGame:
                 for adj_idx in adjacent_plates:
                     adj_plate = self.plates[adj_idx]
                     
-                    # Skip empty adjacent plates
                     if not adj_plate.slices:
                         continue
                     
@@ -198,9 +172,8 @@ class CakeGame:
                                 merged_this_round = True
                                 merges_occurred = True
                                 break
-                        elif count == adj_colors[color] and count > 0:  # ADD THIS BLOCK
-                            # Equal counts - use plate index as tiebreaker
-                            # Always move from higher index to lower index for consistency
+                        elif count == adj_colors[color] and count > 0: 
+                            # Equal counts - plate index as tiebreaker
                             if plate_idx < adj_idx:
                                 moved = self._move_color_between_plates(adj_idx, plate_idx, color)
                             else:
@@ -216,8 +189,9 @@ class CakeGame:
                 if merged_this_round:
                     break
             
-            # If no consolidation happened, check for mixed plates
+
             if not merged_this_round:
+
                 # PHASE 2: Handle mixed color plates
                 mixed_plates = []
                 for idx, plate in enumerate(self.plates):
@@ -228,11 +202,9 @@ class CakeGame:
                     if len(colors) > 1:
                         mixed_plates.append(idx)
                 
-                # If no mixed plates, we're done
                 if not mixed_plates:
                     break
                     
-                # For each mixed plate
                 for plate_idx in mixed_plates:
                     plate = self.plates[plate_idx]
                     color_counts = Counter([s.color for s in plate.slices])
@@ -243,12 +215,10 @@ class CakeGame:
                     
                     # Try to move minority colors out first
                     moved_minority = False
-                    for color, _ in colors_by_count[1:]:  # Skip majority color
-                        # First try adjacent plates that already have this color
+                    for color, _ in colors_by_count[1:]:
                         for adj_idx in self.get_adjacent_plates(plate_idx):
                             adj_plate = self.plates[adj_idx]
                             
-                            # Skip full plates
                             if len(adj_plate.slices) >= adj_plate.max_capacity:
                                 continue
                                 
@@ -259,26 +229,21 @@ class CakeGame:
                                     merged_this_round = True
                                     merges_occurred = True
                                     break
-                        
-                        # If moved to an adjacent plate, break
+
                         if moved_minority:
                             break
                     
                     if moved_minority:
                         break
                         
-                    # If couldn't move minority colors, try moving majority color
-                    # to a plate that has more of it
                     if not moved_minority:
                         majority_count = color_counts[majority_color]
                         
                         for adj_idx in self.get_adjacent_plates(plate_idx):
                             adj_plate = self.plates[adj_idx]
                             
-                            # Count this color in the adjacent plate
                             adj_count = sum(1 for s in adj_plate.slices if s.color == majority_color)
                             
-                            # If adjacent plate has more of this color and has space
                             if adj_count > majority_count and len(adj_plate.slices) < adj_plate.max_capacity:
                                 if self._move_color_between_plates(plate_idx, adj_idx, majority_color):
                                     merged_this_round = True
@@ -287,8 +252,7 @@ class CakeGame:
                     
                     if merged_this_round:
                         break
-            
-            # If no merges happened this round, we're done
+
             if not merged_this_round:
                 break
         
@@ -297,29 +261,22 @@ class CakeGame:
         
         return merges_occurred
 
+
+    # Move slices of specified color between plates
     def _move_color_between_plates(self, from_idx, to_idx, color):
-        """
-        Moves slices of the specified color from one plate to another.
-        Returns True if any slices were moved, False otherwise.
-        """
         from_plate = self.plates[from_idx]
         to_plate = self.plates[to_idx]
         
-        # Find indices of this color in the source plate
         color_indices = [i for i, s in enumerate(from_plate.slices) if s.color == color]
         
-        # If no slices of this color, return False
         if not color_indices:
             return False
         
-        # Calculate available space in the target plate
         available_space = to_plate.max_capacity - len(to_plate.slices)
         
-        # If no space, return False
         if available_space <= 0:
             return False
         
-        # Move slices (starting from the top to avoid index issues)
         moved = False
         for idx in sorted(color_indices, reverse=True)[:available_space]:
             slice_to_move = from_plate.slices[idx]
@@ -327,10 +284,8 @@ class CakeGame:
             del from_plate.slices[idx]
             moved = True
             
-            # Update indices after each move
             color_indices = [i for i, s in enumerate(from_plate.slices) if s.color == color]
         
-        # Handle empty source plate
         if moved and not from_plate.slices and hasattr(self, 'ui_callback') and self.ui_callback:
             self.ui_callback(from_idx)
         
@@ -341,43 +296,16 @@ class CakeGame:
         self.sort_plate_by_color(self.plates[from_idx])
         self.sort_plate_by_color(self.plates[to_idx])
 
-        
         return moved
 
-    def _move_slice_between_plates(self, from_idx, to_idx, slice_idx):
-        """
-        Moves a single slice from one plate to another.
-        Returns True if successful, False otherwise.
-        """
-        from_plate = self.plates[from_idx]
-        to_plate = self.plates[to_idx]
-        
-        # Check if target plate has space
-        if len(to_plate.slices) >= to_plate.max_capacity:
-            return False
-        
-        # Get the slice and move it
-        slice_to_move = from_plate.slices[slice_idx]
-        to_plate.slices.append(slice_to_move)
-        del from_plate.slices[slice_idx]
-        
-        # Check if source plate is now empty
-        if not from_plate.slices and hasattr(self, 'ui_callback') and self.ui_callback:
-            self.ui_callback(from_idx)
-        
-        # Check if either plate is now complete
-        self._check_plate_completion(from_idx)
-        self._check_plate_completion(to_idx)
-        
-        return True
 
+    # Check all plates for completion (6 same-color slices)
     def _check_for_completed_plates(self):
-        """Check all plates to see if any are completed (6 slices of same color)"""
         for idx, plate in enumerate(self.plates):
             self._check_plate_completion(idx)
 
+
     def _check_plate_completion(self, plate_idx):
-        """Check if a specific plate is completed (6 slices of same color)"""
         plate = self.plates[plate_idx]
         
         # Skip empty plates or plates with wrong number of slices

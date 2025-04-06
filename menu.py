@@ -52,7 +52,7 @@ class CakeMenuUI:
         x = (self.screen_width - self.button_width) // 2 
         return pygame.Rect(x, y_position, self.button_width, self.button_height)  
 
-    # Draw a single button with text and hover effect
+    # Draw a single button with text
     def draw_button(self, text, y_position, hover=False):
         button_rect = self.get_button_rect(y_position)
         color = self.highlight_color if hover else self.button_color 
@@ -89,13 +89,13 @@ class CakeMenuUI:
         pygame.draw.rect(self.screen, self.button_border_color, left_arrow_rect, 2, 15)
         pygame.draw.rect(self.screen, self.button_border_color, right_arrow_rect, 2, 15)
 
-        # Add arrow symbols ("<", ">")
+        # Arrow symbols ("<", ">")
         left_text = self.button_font.render("<", True, self.text_color)
         right_text = self.button_font.render(">", True, self.text_color)
         self.screen.blit(left_text, left_text.get_rect(center=left_arrow_rect.center))
         self.screen.blit(right_text, right_text.get_rect(center=right_arrow_rect.center))
 
-        return button_rect, left_arrow_rect, right_arrow_rect  # Return button rects for hover/click detection
+        return button_rect, left_arrow_rect, right_arrow_rect 
 
     # Draw the dropdown to show game rules (click to expand)
     def draw_rules_dropdown(self, y_position):

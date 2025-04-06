@@ -174,18 +174,80 @@ class CakeGameUI:
         self.selected_queue_idx = None
         self.selected_plate = None
 
+    # Check if level is complete based on score
     def check_level_completion(self):
-        # Debugging: Check the state of the game
         print(f"Checking level completion: Goal state: {self.game.is_goal_state()}, Score: {self.game.score}, Required Score: {self.game.required_score}")
         
-        if self.game.is_goal_state() and self.game.score >= self.game.required_score:
-            print(f"Level {self.current_level_number} completed. Transitioning to next level.")  # Debug print
-            self.current_level_number += 1  # Increment level number to move to the next level
-            self.change_level(self.current_level_number)  # Ensure that level transition occurs only after completion
+        # Check if we have enough score
+        score_met = self.game.score >= self.game.required_score
+        
+        # Check if all plates are properly sorted (no mixed colors)
+        goal_met = self.game.is_goal_state()
+        
+        if score_met and not goal_met:
+            for idx, plate in enumerate(self.game.plates):
+                if plate.slices:
+                    first_color = plate.slices[0].color
+                    is_uniform = all(s.color == first_color for s in plate.slices)
+        
+        if score_met:
+            print(f"Level {self.current_level_number} completed. Transitioning to next level.")
+            next_level = self.current_level_number + 1
+            self.change_level(next_level)
 
 
-            
-    # Handle all mouse click actions
+    # Show popup when game is over 
+    def show_game_over_popup(self):
+        popup_running = True
+        overlay = pygame.Surface((self.screen_width, self.screen_height))
+        overlay.set_alpha(180)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+        
+        box_width = 400
+        box_height = 200
+        box_rect = pygame.Rect(
+            (self.screen_width - box_width) // 2,
+            (self.screen_height - box_height) // 2,
+            box_width,
+            box_height
+        )
+
+        pygame.draw.rect(self.screen, (245, 245, 255), box_rect, border_radius=25)
+        pygame.draw.rect(self.screen, (180, 180, 220), box_rect, 4, border_radius=25)
+        
+        # Title
+        title_font = pygame.font.SysFont("Arial", 40, bold=True)
+        title = title_font.render("GAME OVER", True, (200, 60, 60))
+        self.screen.blit(title, (self.screen_width//2 - title.get_width()//2, box_rect.top + 30))
+
+        # Subtitle
+        subtitle = self.font.render("No empty plates left on the grid!", True, (100, 100, 120))
+        self.screen.blit(subtitle, (self.screen_width//2 - subtitle.get_width()//2, box_rect.top + 90))
+
+        # Score
+        score_text = self.font.render(f"Final Score: {self.game.score}", True, (100, 100, 120))
+        self.screen.blit(score_text, (self.screen_width//2 - score_text.get_width()//2, box_rect.top + 120))
+
+        # Button
+        button_rect = pygame.Rect(self.screen_width//2 - 80, box_rect.bottom - 50, 160, 36)
+        pygame.draw.rect(self.screen, (120, 220, 120), button_rect, border_radius=18)
+        button_text = self.font.render("EXIT", True, (255, 255, 255)) 
+        self.screen.blit(button_text, (button_rect.centerx - button_text.get_width()//2, button_rect.centery - button_text.get_height()//2))
+
+        pygame.display.flip()
+        while popup_running:
+            for event in pygame.event.get():
+                if event.type in [pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN]:
+                    popup_running = False
+                    return True  
+                elif event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+
+    # Handle mouse click events on plates and queue
+    # Check for game over condition
     def handle_click(self, pos):
         # Step 1: Handle click on queue plates
         for idx, plate in enumerate(self.queue_plates):
@@ -193,13 +255,22 @@ class CakeGameUI:
                 if plate:
                     self.selected_queue_idx = idx
                     return
-                
+                    
         # Step 2: If a queue plate is selected, handle click on board plate
         if self.selected_queue_idx is not None:
             queue_idx = self.selected_queue_idx
             selected_plate = self.queue_plates[queue_idx]
 
             if selected_plate is not None:
+                # Check if there's any empty plate on the grid
+                empty_plates = any(len(board_plate.slices) == 0 for board_plate in self.game.plates)
+                
+                if not empty_plates:
+                    # No empty plates - show game over
+                    self.show_game_over_popup()
+                    return
+                    
+                # Continue with normal plate placement logic
                 for idx, board_plate in enumerate(self.game.plates):
                     if self.get_cell_rect(idx).collidepoint(pos) and len(board_plate.slices) == 0:
                         selected_slices = list(selected_plate)
@@ -209,7 +280,6 @@ class CakeGameUI:
                             self.game.merge_all_possible_slices()
                             self.check_level_completion()
 
-                            # ✅ Use saved index here instead of self.selected_queue_idx
                             if self.queue_pointer < len(self.game.queue_data):
                                 next_plate = self.game.queue_data[self.queue_pointer]
                                 self.queue_plates[queue_idx] = [
@@ -222,15 +292,15 @@ class CakeGameUI:
                             self.selected_queue_idx = None
                             return
 
-            # If clicked somewhere invalid, deselect queue plate
-            self.selected_queue_idx = None
-            return
-
-        # Step 3: Select a plate on the grid (used later for other interactions)
-        for idx, plate in enumerate(self.game.plates):
-            if self.get_cell_rect(idx).collidepoint(pos) and plate.slices:
-                self.selected_plate = idx
+                # If clicked somewhere invalid, deselect queue plate
+                self.selected_queue_idx = None
                 return
+
+            # Step 3: Select a plate on the grid (used later for other interactions)
+            for idx, plate in enumerate(self.game.plates):
+                if self.get_cell_rect(idx).collidepoint(pos) and plate.slices:
+                    self.selected_plate = idx
+                    return
 
     # Animate a plate shrinking visually
     def animate_disappearing_plate(self, plate_idx):
@@ -258,42 +328,33 @@ class CakeGameUI:
             pygame.display.update()
             pygame.time.delay(30)
 
-    def get_current_level_number(self):
-        match = re.search(r'level(\d+)', self.level_file)
-        if match:
-            return int(match.group(1))
-        return 1  # fallback default
-    
 
+    # Switch to a different level
     def change_level(self, level_number: int):
-        # Ensure the level file exists before attempting to load it
         self.level_file = f"game/levels/level{level_number}.txt"
         print(f"Attempting to load level: {self.level_file}")
         
         if not os.path.exists(self.level_file):
             print(f"Level file {self.level_file} does not exist!")
-            return  # Simply return if the level doesn't exist
+            if level_number > 1: 
+                self.show_game_completed_popup()
+            return
         
         print(f"Loading level {level_number}...")
         
-        # Set the current level number first
         self.current_level_number = level_number
         
-        # Show the level popup before creating the new game
         self.show_level_popup(level_number)
         
-        # Create a new game with the new level
         self.game = CakeGame(self.game.width, self.game.height)
         self.game.ui_callback = self.animate_disappearing_plate
         self.game.ui_level_switch = self.change_level
         self.game.initialize_level(self.level_file)
         
-        # Reset UI state
         self.selected_queue_idx = None
         self.selected_plate = None
         self.queue_pointer = self.queue_slots
-        
-        # Set up queue plates based on the new game
+
         self.queue_plates = [
             [CakeSlice(color, 1) for color in reversed(plate)]
             for plate in self.game.queue_data[:self.queue_slots]
@@ -302,7 +363,7 @@ class CakeGameUI:
         print(f"Level {level_number} loaded successfully")
 
 
-    # Show popup UI when a level is complete
+     # Show "Level complete" popup
     def show_level_popup(self, level_number):
         popup_running = True
         overlay = pygame.Surface((self.screen_width, self.screen_height))
@@ -346,6 +407,53 @@ class CakeGameUI:
                     pygame.quit()
                     sys.exit()
 
+
+    # Show popup when all levels are completed
+    def show_game_completed_popup(self):
+        popup_running = True
+        overlay = pygame.Surface((self.screen_width, self.screen_height))
+        overlay.set_alpha(180)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+        
+        box_width = 400
+        box_height = 200
+        box_rect = pygame.Rect(
+            (self.screen_width - box_width) // 2,
+            (self.screen_height - box_height) // 2,
+            box_width,
+            box_height
+        )
+
+        pygame.draw.rect(self.screen, (245, 245, 255), box_rect, border_radius=25)
+        pygame.draw.rect(self.screen, (180, 180, 220), box_rect, 4, border_radius=25)
+        
+        # Title
+        title_font = pygame.font.SysFont("Arial", 40, bold=True)
+        title = title_font.render("CONGRATULATIONS!", True, (80, 60, 150))
+        self.screen.blit(title, (self.screen_width//2 - title.get_width()//2, box_rect.top + 30))
+
+        # Subtitle
+        subtitle = self.font.render("All levels have been passed!", True, (100, 100, 120))
+        self.screen.blit(subtitle, (self.screen_width//2 - subtitle.get_width()//2, box_rect.top + 90))
+
+        # Button
+        button_rect = pygame.Rect(self.screen_width//2 - 80, box_rect.bottom - 50, 160, 36)
+        pygame.draw.rect(self.screen, (120, 220, 120), button_rect, border_radius=18)
+        button_text = self.font.render("MENU", True, (255, 255, 255))
+        self.screen.blit(button_text, (button_rect.centerx - button_text.get_width()//2, button_rect.centery - button_text.get_height()//2))
+
+        pygame.display.flip()
+        while popup_running:
+            for event in pygame.event.get():
+                if event.type in [pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN]:
+                    popup_running = False
+                    # Return to menu by exiting the game loop
+                    return True  # Signal to main game loop to exit
+                elif event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()  
+
     # Run the game loop
     def run(self):
         running = True
@@ -354,11 +462,13 @@ class CakeGameUI:
                 if event.type == pygame.QUIT:
                     running = False
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    self.handle_click(event.pos)
+                    result = self.handle_click(event.pos)
+                    if result == True:  # If a popup returns True, exit to menu
+                        running = False
             self.draw()
             self.clock.tick(60)
         pygame.quit()
-        sys.exit()
+        return 
 
 
 if __name__ == "__main__":
