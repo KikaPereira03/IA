@@ -1,7 +1,6 @@
 import pygame
 from typing import List, Tuple, Optional
 from game.utils import load_level_file
-from game.utils import save_score_in_level_file
 from dataclasses import dataclass
 import os
 
@@ -49,12 +48,16 @@ class CakeGame:
                 if not line or line.startswith('#'):
                     continue
 
+                if line.lower().startswith("score:"):
+                    self.required_score = int(line.split(":")[1].strip())
+                    continue
+
                 if line.lower().startswith("queue:"):
                     reading_queue = True
                     continue
 
                 if reading_queue:
-                    if ':' in line:  # likely start of scoreboard
+                    if ':' in line:
                         break
                     self.queue_data.append(list(line.strip()))
                     continue
@@ -337,105 +340,6 @@ class CakeGame:
 
         
         return moved
-    def _move_minority_color(self, plate_idx, color):
-        """
-        Tries to move a minority color from this plate to an adjacent plate.
-        Returns True if successful, False otherwise.
-        """
-        source_plate = self.plates[plate_idx]
-        
-        # Find all slices of this color in the source plate
-        color_indices = [i for i, s in enumerate(source_plate.slices) if s.color == color]
-        if not color_indices:
-            return False
-        
-        # Check all adjacent plates, but prioritize them by adjacency type
-        # (typically up/down/left/right in that order would be most intuitive)
-        adjacent_plates = self.get_adjacent_plates(plate_idx)
-        
-        # First priority: Find a plate that already has more of this color
-        best_plate = None
-        most_matching = 0
-        
-        for adj_idx in adjacent_plates:
-            adj_plate = self.plates[adj_idx]
-            
-            # Skip full plates
-            if len(adj_plate.slices) >= adj_plate.max_capacity:
-                continue
-                
-            # Count matching colors
-            matches = sum(1 for s in adj_plate.slices if s.color == color)
-            
-            # If this plate has more matching colors than our current best
-            if matches > most_matching:
-                most_matching = matches
-                best_plate = adj_idx
-        
-        # If we found a plate with matching colors
-        if best_plate is not None:
-            # Try to move all slices of this color
-            moved = False
-            for idx in sorted(color_indices, reverse=True):
-                if len(self.plates[best_plate].slices) < self.plates[best_plate].max_capacity:
-                    if self._move_slice_between_plates(plate_idx, best_plate, idx):
-                        moved = True
-                    # Recompute indices after each move
-                    color_indices = [i for i, s in enumerate(source_plate.slices) if s.color == color]
-            return moved
-        
-        # If no plate with matching colors is found and there's only one minority slice,
-        # it's better not to move it to avoid random movements
-        if len(color_indices) == 1:
-            return False
-        
-        # Second priority: Find any plate with space (only if we have multiple slices)
-        for adj_idx in adjacent_plates:
-            adj_plate = self.plates[adj_idx]
-            
-            # Skip full plates
-            if len(adj_plate.slices) >= adj_plate.max_capacity:
-                continue
-            
-            # Try to move all slices of this color
-            moved = False
-            for idx in sorted(color_indices, reverse=True):
-                if len(adj_plate.slices) < adj_plate.max_capacity:
-                    if self._move_slice_between_plates(plate_idx, adj_idx, idx):
-                        moved = True
-                    # Recompute indices after each move
-                    color_indices = [i for i, s in enumerate(source_plate.slices) if s.color == color]
-            return moved
-        
-        return False
-
-    def _move_majority_color(self, plate_idx, color):
-        """
-        Tries to move the majority color to a plate that has more of this color.
-        Returns True if successful, False otherwise.
-        """
-        source_plate = self.plates[plate_idx]
-        
-        # Find all slices of this color in the source plate
-        source_count = sum(1 for s in source_plate.slices if s.color == color)
-        
-        # Check all adjacent plates
-        adjacent_plates = self.get_adjacent_plates(plate_idx)
-        
-        for adj_idx in adjacent_plates:
-            adj_plate = self.plates[adj_idx]
-            
-            # Count this color in the adjacent plate
-            adj_count = sum(1 for s in adj_plate.slices if s.color == color)
-            
-            # If adjacent plate has more of this color and has space
-            if adj_count > source_count and len(adj_plate.slices) < adj_plate.max_capacity:
-                # Find the index of the first slice of this color
-                for i, slice in enumerate(source_plate.slices):
-                    if slice.color == color:
-                        return self._move_slice_between_plates(plate_idx, adj_idx, i)
-        
-        return False
 
     def _move_slice_between_plates(self, from_idx, to_idx, slice_idx):
         """

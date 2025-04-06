@@ -44,33 +44,3 @@ def load_level_file(filepath: str) -> list[str]:
     except FileNotFoundError:
         print(f"Could not find level file: {filepath}")
     return lines
-
-# Save updated score to a level file
-def save_score_in_level_file(level, new_entry):
-    filename = f"game/levels/level{level}.txt"
-    grid, scoreboard = load_level_and_scoreboard(level)
-
-    name, score = new_entry
-
-    # Check if player already has a score
-    updated = False
-    for i, (existing_name, existing_score) in enumerate(scoreboard):
-        if existing_name == name:
-            if score > existing_score:
-                scoreboard[i] = (name, score)
-            updated = True
-            break
-
-    if not updated:
-        scoreboard.append((name, score))
-
-    # Sort scores in descending order
-    scoreboard.sort(key=lambda x: x[1], reverse=True)
-
-    # Rewrite level file with updated scoreboard
-    with open(filename, "w") as f:
-        for line in grid:
-            f.write(f"{line}\n")
-        f.write("\n# SCOREBOARD\n")
-        for name, score in scoreboard:
-            f.write(f"{name} {score}\n")
