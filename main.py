@@ -4,7 +4,8 @@ import sys
 import time
 import os
 from typing import List, Tuple, Optional
-from game.core import CakeGame, CakeSlice
+from game.core import Plate, CakeGame, CakeSlice
+from game.solver import solve_game
 
 class CakeGameUI:
     # Initialize the game UI
