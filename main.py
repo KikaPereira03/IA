@@ -171,6 +171,7 @@ class CakeGameUI:
                     selected_slices = list(self.queue_plates[self.selected_queue_idx])
                     if selected_slices:
                         board_plate.slices.extend(selected_slices)
+                        self.game.merge_all_possible_slices()
 
                         if self.queue_pointer < len(self.game.queue_data):
                             next_plate = self.game.queue_data[self.queue_pointer]
@@ -183,6 +184,7 @@ class CakeGameUI:
 
                         self.selected_queue_idx = None
                         return
+
 
             # If clicked somewhere invalid, deselect queue plate
             self.selected_queue_idx = None

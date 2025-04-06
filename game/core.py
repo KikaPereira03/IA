@@ -93,5 +93,395 @@ class CakeGame:
         if col < self.width - 1:
             neighbors.append(idx + 1)  # Right
         return neighbors
-
     
+    def get_top_group(self, plate):
+        if not plate.slices:
+            return []
+        top_color = plate.slices[-1].color
+        group = []
+        for s in reversed(plate.slices):
+            if s.color == top_color:
+                group.append(s)
+            else:
+                break
+        return list(reversed(group))
+
+    def is_valid_transfer(self, from_plate, to_plate, group):
+        if not group:
+            return False
+        if len(to_plate.slices) + len(group) > to_plate.max_capacity:
+            return False
+        if not to_plate.slices:
+            return True
+        return to_plate.slices[-1].color == group[0].color
+    
+    def move_slices(self, from_idx, to_idx, count):
+        group = self.plates[from_idx].slices[-count:]
+        self.plates[to_idx].slices.extend(group)
+        del self.plates[from_idx].slices[-count:]
+
+    def is_goal_state(self):
+        for plate in self.plates:
+            if not plate.slices:
+                continue
+            first_color = plate.slices[0].color
+            if any(s.color != first_color for s in plate.slices):
+                return False
+        return True
+
+    def get_state_hash(self):
+        return "|".join(".".join(s.color for s in plate.slices) for plate in self.plates)
+
+    def merge_all_possible_slices(self):
+        """
+        Automatically merge cake slices between adjacent plates.
+        First checks adjacency, then consolidates colors between adjacent plates.
+        """
+        from collections import Counter
+        
+        # Track whether any merges occurred
+        merges_occurred = False
+        
+        # Process until no more merges are possible
+        while True:
+            # Flag to track if any merges happened in this iteration
+            merged_this_round = False
+            
+            # PHASE 1: Check all adjacent plate pairs for color consolidation
+            for plate_idx, plate in enumerate(self.plates):
+                # Skip empty plates
+                if not plate.slices:
+                    continue
+                
+                # Get all adjacent plates
+                adjacent_plates = self.get_adjacent_plates(plate_idx)
+                
+                # For each adjacent plate, check for common colors
+                for adj_idx in adjacent_plates:
+                    adj_plate = self.plates[adj_idx]
+                    
+                    # Skip empty adjacent plates
+                    if not adj_plate.slices:
+                        continue
+                    
+                    # Find colors that appear in both plates
+                    plate_colors = Counter([s.color for s in plate.slices])
+                    adj_colors = Counter([s.color for s in adj_plate.slices])
+                    
+                    # Check each color in the plate
+                    for color, count in plate_colors.items():
+                        # Skip if color doesn't appear in adjacent plate
+                        if color not in adj_colors:
+                            continue
+                            
+                        # Determine which plate has more of this color
+                        if adj_colors[color] > count:
+                            # Adjacent plate has more, move from plate to adjacent
+                            moved = self._move_color_between_plates(plate_idx, adj_idx, color)
+                            if moved:
+                                merged_this_round = True
+                                merges_occurred = True
+                                break
+                        elif count > adj_colors[color]:
+                            # This plate has more, move from adjacent to plate
+                            moved = self._move_color_between_plates(adj_idx, plate_idx, color)
+                            if moved:
+                                merged_this_round = True
+                                merges_occurred = True
+                                break
+                        elif count == adj_colors[color] and count > 0:  # ADD THIS BLOCK
+                            # Equal counts - use plate index as tiebreaker
+                            # Always move from higher index to lower index for consistency
+                            if plate_idx < adj_idx:
+                                moved = self._move_color_between_plates(adj_idx, plate_idx, color)
+                            else:
+                                moved = self._move_color_between_plates(plate_idx, adj_idx, color)
+                            if moved:
+                                merged_this_round = True
+                                merges_occurred = True
+                                break
+                    
+                    if merged_this_round:
+                        break
+                        
+                if merged_this_round:
+                    break
+            
+            # If no consolidation happened, check for mixed plates
+            if not merged_this_round:
+                # PHASE 2: Handle mixed color plates
+                mixed_plates = []
+                for idx, plate in enumerate(self.plates):
+                    if not plate.slices:
+                        continue
+                        
+                    colors = set(s.color for s in plate.slices)
+                    if len(colors) > 1:
+                        mixed_plates.append(idx)
+                
+                # If no mixed plates, we're done
+                if not mixed_plates:
+                    break
+                    
+                # For each mixed plate
+                for plate_idx in mixed_plates:
+                    plate = self.plates[plate_idx]
+                    color_counts = Counter([s.color for s in plate.slices])
+                    
+                    # Find majority and minority colors
+                    colors_by_count = color_counts.most_common()
+                    majority_color = colors_by_count[0][0]
+                    
+                    # Try to move minority colors out first
+                    moved_minority = False
+                    for color, _ in colors_by_count[1:]:  # Skip majority color
+                        # First try adjacent plates that already have this color
+                        for adj_idx in self.get_adjacent_plates(plate_idx):
+                            adj_plate = self.plates[adj_idx]
+                            
+                            # Skip full plates
+                            if len(adj_plate.slices) >= adj_plate.max_capacity:
+                                continue
+                                
+                            # If adjacent plate has this color, try to move
+                            if any(s.color == color for s in adj_plate.slices):
+                                if self._move_color_between_plates(plate_idx, adj_idx, color):
+                                    moved_minority = True
+                                    merged_this_round = True
+                                    merges_occurred = True
+                                    break
+                        
+                        # If moved to an adjacent plate, break
+                        if moved_minority:
+                            break
+                    
+                    if moved_minority:
+                        break
+                        
+                    # If couldn't move minority colors, try moving majority color
+                    # to a plate that has more of it
+                    if not moved_minority:
+                        majority_count = color_counts[majority_color]
+                        
+                        for adj_idx in self.get_adjacent_plates(plate_idx):
+                            adj_plate = self.plates[adj_idx]
+                            
+                            # Count this color in the adjacent plate
+                            adj_count = sum(1 for s in adj_plate.slices if s.color == majority_color)
+                            
+                            # If adjacent plate has more of this color and has space
+                            if adj_count > majority_count and len(adj_plate.slices) < adj_plate.max_capacity:
+                                if self._move_color_between_plates(plate_idx, adj_idx, majority_color):
+                                    merged_this_round = True
+                                    merges_occurred = True
+                                    break
+                    
+                    if merged_this_round:
+                        break
+            
+            # If no merges happened this round, we're done
+            if not merged_this_round:
+                break
+        
+        # Check for completed plates
+        self._check_for_completed_plates()
+        
+        return merges_occurred
+
+    def _move_color_between_plates(self, from_idx, to_idx, color):
+        """
+        Moves slices of the specified color from one plate to another.
+        Returns True if any slices were moved, False otherwise.
+        """
+        from_plate = self.plates[from_idx]
+        to_plate = self.plates[to_idx]
+        
+        # Find indices of this color in the source plate
+        color_indices = [i for i, s in enumerate(from_plate.slices) if s.color == color]
+        
+        # If no slices of this color, return False
+        if not color_indices:
+            return False
+        
+        # Calculate available space in the target plate
+        available_space = to_plate.max_capacity - len(to_plate.slices)
+        
+        # If no space, return False
+        if available_space <= 0:
+            return False
+        
+        # Move slices (starting from the top to avoid index issues)
+        moved = False
+        for idx in sorted(color_indices, reverse=True)[:available_space]:
+            slice_to_move = from_plate.slices[idx]
+            to_plate.slices.append(slice_to_move)
+            del from_plate.slices[idx]
+            moved = True
+            
+            # Update indices after each move
+            color_indices = [i for i, s in enumerate(from_plate.slices) if s.color == color]
+        
+        # Handle empty source plate
+        if moved and not from_plate.slices and hasattr(self, 'ui_callback') and self.ui_callback:
+            self.ui_callback(from_idx)
+        
+        # Check for completions
+        self._check_plate_completion(from_idx)
+        self._check_plate_completion(to_idx)
+        
+        return moved
+    def _move_minority_color(self, plate_idx, color):
+        """
+        Tries to move a minority color from this plate to an adjacent plate.
+        Returns True if successful, False otherwise.
+        """
+        source_plate = self.plates[plate_idx]
+        
+        # Find all slices of this color in the source plate
+        color_indices = [i for i, s in enumerate(source_plate.slices) if s.color == color]
+        if not color_indices:
+            return False
+        
+        # Check all adjacent plates, but prioritize them by adjacency type
+        # (typically up/down/left/right in that order would be most intuitive)
+        adjacent_plates = self.get_adjacent_plates(plate_idx)
+        
+        # First priority: Find a plate that already has more of this color
+        best_plate = None
+        most_matching = 0
+        
+        for adj_idx in adjacent_plates:
+            adj_plate = self.plates[adj_idx]
+            
+            # Skip full plates
+            if len(adj_plate.slices) >= adj_plate.max_capacity:
+                continue
+                
+            # Count matching colors
+            matches = sum(1 for s in adj_plate.slices if s.color == color)
+            
+            # If this plate has more matching colors than our current best
+            if matches > most_matching:
+                most_matching = matches
+                best_plate = adj_idx
+        
+        # If we found a plate with matching colors
+        if best_plate is not None:
+            # Try to move all slices of this color
+            moved = False
+            for idx in sorted(color_indices, reverse=True):
+                if len(self.plates[best_plate].slices) < self.plates[best_plate].max_capacity:
+                    if self._move_slice_between_plates(plate_idx, best_plate, idx):
+                        moved = True
+                    # Recompute indices after each move
+                    color_indices = [i for i, s in enumerate(source_plate.slices) if s.color == color]
+            return moved
+        
+        # If no plate with matching colors is found and there's only one minority slice,
+        # it's better not to move it to avoid random movements
+        if len(color_indices) == 1:
+            return False
+        
+        # Second priority: Find any plate with space (only if we have multiple slices)
+        for adj_idx in adjacent_plates:
+            adj_plate = self.plates[adj_idx]
+            
+            # Skip full plates
+            if len(adj_plate.slices) >= adj_plate.max_capacity:
+                continue
+            
+            # Try to move all slices of this color
+            moved = False
+            for idx in sorted(color_indices, reverse=True):
+                if len(adj_plate.slices) < adj_plate.max_capacity:
+                    if self._move_slice_between_plates(plate_idx, adj_idx, idx):
+                        moved = True
+                    # Recompute indices after each move
+                    color_indices = [i for i, s in enumerate(source_plate.slices) if s.color == color]
+            return moved
+        
+        return False
+
+    def _move_majority_color(self, plate_idx, color):
+        """
+        Tries to move the majority color to a plate that has more of this color.
+        Returns True if successful, False otherwise.
+        """
+        source_plate = self.plates[plate_idx]
+        
+        # Find all slices of this color in the source plate
+        source_count = sum(1 for s in source_plate.slices if s.color == color)
+        
+        # Check all adjacent plates
+        adjacent_plates = self.get_adjacent_plates(plate_idx)
+        
+        for adj_idx in adjacent_plates:
+            adj_plate = self.plates[adj_idx]
+            
+            # Count this color in the adjacent plate
+            adj_count = sum(1 for s in adj_plate.slices if s.color == color)
+            
+            # If adjacent plate has more of this color and has space
+            if adj_count > source_count and len(adj_plate.slices) < adj_plate.max_capacity:
+                # Find the index of the first slice of this color
+                for i, slice in enumerate(source_plate.slices):
+                    if slice.color == color:
+                        return self._move_slice_between_plates(plate_idx, adj_idx, i)
+        
+        return False
+
+    def _move_slice_between_plates(self, from_idx, to_idx, slice_idx):
+        """
+        Moves a single slice from one plate to another.
+        Returns True if successful, False otherwise.
+        """
+        from_plate = self.plates[from_idx]
+        to_plate = self.plates[to_idx]
+        
+        # Check if target plate has space
+        if len(to_plate.slices) >= to_plate.max_capacity:
+            return False
+        
+        # Get the slice and move it
+        slice_to_move = from_plate.slices[slice_idx]
+        to_plate.slices.append(slice_to_move)
+        del from_plate.slices[slice_idx]
+        
+        # Check if source plate is now empty
+        if not from_plate.slices and hasattr(self, 'ui_callback') and self.ui_callback:
+            self.ui_callback(from_idx)
+        
+        # Check if either plate is now complete
+        self._check_plate_completion(from_idx)
+        self._check_plate_completion(to_idx)
+        
+        return True
+
+    def _check_for_completed_plates(self):
+        """Check all plates to see if any are completed (6 slices of same color)"""
+        for idx, plate in enumerate(self.plates):
+            self._check_plate_completion(idx)
+
+    def _check_plate_completion(self, plate_idx):
+        """Check if a specific plate is completed (6 slices of same color)"""
+        plate = self.plates[plate_idx]
+        
+        # Skip empty plates or plates with wrong number of slices
+        if not plate.slices or len(plate.slices) != 6:
+            return False
+            
+        # Check if all slices are the same color
+        first_color = plate.slices[0].color
+        if all(s.color == first_color for s in plate.slices):
+            # Award points
+            self.score += len(plate.slices) * 10
+            
+            # Trigger animation
+            if hasattr(self, 'ui_callback') and self.ui_callback:
+                self.ui_callback(plate_idx)
+                
+            # Clear the plate
+            plate.slices = []
+            return True
+        
+        return False
