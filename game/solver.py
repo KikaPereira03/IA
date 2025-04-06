@@ -37,13 +37,14 @@ def a_star_solver(initial_game, heuristic_fn):
     while open_list:
         current = heapq.heappop(open_list)
 
-        state_hash = current.state.get_state_hash()
+        state_hash = hash(current.state)
+
         if state_hash in closed_set:
             continue
 
         closed_set.add(state_hash)
 
-        if current.state.is_goal_state():
+        if current.state.is_goal():
             return reconstruct_path(current)
 
         for from_idx, from_plate in enumerate(current.state.plates):
