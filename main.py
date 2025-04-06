@@ -7,6 +7,7 @@ from typing import List, Tuple, Optional
 from game.core import Plate, CakeGame, CakeSlice
 from game.solver import solve_game
 
+
 class CakeGameUI:
     # Initialize the game UI
     def __init__(self, level_file="game/levels/level1.txt", width: int = 4, height: int = 5, max_capacity=6):
@@ -455,6 +456,64 @@ class CakeGameUI:
                     pygame.quit()
                     sys.exit()  
 
+            # Dentro de CakeGameUI (main.py)
+    def get_grid_state(self):
+        # Converte os pratos da grid para listas simples de cores (ex: ["R", "R", "R"])
+        grid_state = []
+        for row in range(self.game.height):
+            row_data = []
+            for col in range(self.game.width):
+                idx = row * self.game.width + col
+                plate = self.game.plates[idx]
+                if plate.slices:
+                    row_data.append([slice.color for slice in plate.slices])
+                else:
+                    row_data.append(None)
+            grid_state.append(row_data)
+        return grid_state
+
+    def get_queue_state(self):
+        # Converte os pratos da fila para listas simples de cores
+        return [[slice.color for slice in plate] for plate in self.game.queue_data]
+
+    def run_solver(self):
+       
+
+        grid = self.get_grid_state()
+        queue = self.get_queue_state()
+
+        solution = solve_game(grid, queue)
+
+        if solution is None:
+            print("❌ Não foi encontrada solução.")
+            return
+
+        print("✅ Solução encontrada. A aplicar...")
+
+        # Limpa o tabuleiro atual
+        for i in range(len(self.game.plates)):
+            self.game.plates[i] = Plate()
+
+        # Aplica todos os movimentos da solução
+        for pos, plate in solution:
+            r, c = pos
+            idx = r * self.game.width + c
+
+            novo_prato = Plate()
+            for color in plate:
+                novo_prato.slices.append(CakeSlice(color=color, size=1))  # cada fatia com tamanho 1
+
+            self.game.plates[idx] = novo_prato
+
+            # Se tiveres função para verificar desaparecimentos automáticos, chama aqui:
+            if hasattr(self.game, "check_plate_disappearance"):
+                self.game.check_plate_disappearance()
+
+            # Atualiza o ecrã
+            self.draw()
+            pygame.display.flip()
+            pygame.time.wait(300)  # tempo entre jogadas (ajusta se quiseres) 
+
     # Run the game loop
     def run(self):
         running = True
@@ -462,6 +521,9 @@ class CakeGameUI:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_s:
+                        self.run_solver()
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     result = self.handle_click(event.pos)
                     if result == True:  # If a popup returns True, exit to menu

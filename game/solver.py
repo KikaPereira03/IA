@@ -71,3 +71,56 @@ def a_star_solver(initial_game, heuristic_fn):
 
     return None  # No solution found
 
+class GameState:
+    def __init__(self, grid, queue, path=None):
+        # Copia profunda para não partilhar estado entre objetos
+        self.grid = [row.copy() for row in grid]
+        self.queue = [p.copy() for p in queue]
+        self.path = path or []
+
+    def is_goal(self):
+        return all(cell is None for row in self.grid for cell in row) and not self.queue
+
+    def successors(self):
+        succs = []
+        if not self.queue:
+            return succs
+
+        next_plate = self.queue[0]  # prato da vez
+        for r in range(len(self.grid)):
+            for c in range(len(self.grid[0])):
+                if self.grid[r][c] is None:
+                    new_grid = [row.copy() for row in self.grid]
+                    new_queue = self.queue[1:]
+                    new_grid[r][c] = next_plate.copy()
+                    new_grid = self.resolve_disappear(new_grid)
+                    new_state = GameState(new_grid, new_queue, self.path + [((r, c), next_plate)])
+                    succs.append(new_state)
+        return succs
+
+    def resolve_disappear(self, grid):
+        for r in range(len(grid)):
+            for c in range(len(grid[0])):
+                plate = grid[r][c]
+                if plate is not None and len(plate) == 6 and all(f == plate[0] for f in plate):
+                    grid[r][c] = None
+        return grid
+
+    def __eq__(self, other):
+        return self.grid == other.grid and self.queue == other.queue
+
+    def __hash__(self):
+        return hash(str(self.grid) + str(self.queue))
+
+
+# Heurística muito simples: contar número de pratos ocupados + pratos restantes na queue
+def simple_heuristic(state: GameState):
+    pratos_na_grid = sum(1 for row in state.grid for cell in row if cell is not None)
+    return pratos_na_grid + len(state.queue)
+
+
+# Exemplo de função para correr o solver com um estado inicial
+def solve_game(grid, queue):
+    initial_state = GameState(grid, queue)
+    path = a_star_solver(initial_state, heuristic_fn=simple_heuristic)
+    return path
