@@ -1,6 +1,6 @@
 import pygame
 import sys
-from game.models import CakeSlice
+from game.core import CakeSlice
 from game.utils import draw_text
 
 class CakeMenuUI:

@@ -1,6 +1,6 @@
 import pygame
 from typing import Tuple
-from game.models import CakeSlice
+
 
 
 # Draw text to a surface

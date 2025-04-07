@@ -13,7 +13,7 @@ from game.solver import astar_bot_solver
 # from game.solver import bfs_bot_solver
 # from game.solver import dfs_bot_solver
 from game.solver import evaluate_best_placement
-from game.models import CakeSlice
+from game.core import CakeSlice
 
 
 class CakeGameUI:
@@ -521,40 +521,55 @@ class CakeGameUI:
         print("✅ Bot terminou.")
 
     def run_solver_with_algorithm(self, algorithm):
-            solver_map = {
-                'greedy': greedy_bot_solver,
-                # 'bfs': bfs_bot_solver,
-                # 'dfs': dfs_bot_solver,
-                'a*': astar_bot_solver
-            }
+        solver_map = {
+            'greedy': greedy_bot_solver,
+            'a*': astar_bot_solver,
+            # 'bfs': bfs_bot_solver,
+            # 'dfs': dfs_bot_solver
+        }
 
-            solver = solver_map.get(algorithm.lower())
-            if solver:
-                print(f"⚙️ Bot ({algorithm}) a correr...")
-                while self.game.queue_data:
-                    queue = list(enumerate(self.game.queue_data[:3]))
-                    moves = solver(self.game.plates, queue, apply_moves=True)
+        solver = solver_map.get(algorithm.lower())
+        if solver:
+            print(f"⚙️ Bot ({algorithm}) a correr...")
 
-                    if not moves:
-                        print("❌ Bot não encontrou movimentos.")
-                        break
+            # DEBUG: Estado inicial
+            print("Estado inicial (debug):")
+            for idx, plate in enumerate(self.game.plates):
+                print(f"Grid {idx}: {[s.color for s in plate.slices]}")
+            print("Queue:")
+            for idx, plate in enumerate(self.game.queue_data[:3]):
+                print(f"{idx}: {plate}")
 
-                    q_index, g_index = moves[0]
-                    plate = self.game.queue_data.pop(q_index)
-                    self.queue_plates = [
-                        [CakeSlice(color, 1) for color in reversed(p)]
-                        for p in self.game.queue_data[:self.queue_slots]
-                    ]
+            while self.game.queue_data:
+                queue = list(enumerate(self.game.queue_data[:3]))
+                moves = solver(self.game.plates, queue, apply_moves=True)
 
-                    print(f"🤖 Bot colocou prato real {q_index} ({plate}) na célula {g_index}")
-                    self.game.plates[g_index].slices.extend([CakeSlice(color, 1) for color in plate])
-                    self.game._check_plate_completion(g_index)
-                    self.game.merge_all_possible_slices()
-                    if self.check_level_completion():
-                        break
-                    pygame.time.delay(800)
-                    self.draw()
-                print("✅ Bot terminou.")
+
+                if not moves:
+                    print("❌ Bot não encontrou movimentos.")
+                    break
+
+                q_index, g_index = moves[0]
+                plate = self.game.queue_data.pop(q_index)
+
+                self.queue_plates = [
+                    [CakeSlice(color, 1) for color in reversed(p)]
+                    for p in self.game.queue_data[:self.queue_slots]
+                ]
+
+                print(f"🤖 Bot colocou prato real {q_index} ({plate}) na célula {g_index}")
+                self.game.plates[g_index].slices.extend([CakeSlice(color, 1) for color in plate])
+                self.game._check_plate_completion(g_index)
+                self.game.merge_all_possible_slices()
+
+                if self.check_level_completion():
+                    break
+
+                pygame.time.delay(800)
+                self.draw()
+
+            print("✅ Bot terminou.")
+
 
     # Run the game loop
     def run(self):

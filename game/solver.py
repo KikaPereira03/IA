@@ -1,9 +1,9 @@
 import heapq
 import copy
-from game.utils import evaluate_board, CakeSlice
-from collections import deque
+from game.utils import evaluate_board
+from game.core import CakeSlice
 from copy import deepcopy
-#from game.core import merge_all_possible_slices
+
 
 
 
@@ -64,7 +64,7 @@ def a_star_solver(initial_game, heuristic_fn):
                 if current.state.is_valid_transfer(from_plate, to_plate, group):
                     new_state = copy.deepcopy(current.state)
                     new_state.move_slices(from_idx, to_idx, len(group))
-                    new_state.merge_all_possible_slices()
+                    new_state.game.merge_all_possible_slices()
                     h = heuristic_fn(new_state)
                     new_node = SearchNode(
                         state=new_state,
@@ -188,63 +188,57 @@ def greedy_bot_solver(grid, queue, apply_moves=False):
 
     return [best_move]
 
-import heapq
 
 def heuristic(grid):
-    # Heurística: número de fatias mal organizadas
-    h = 0
-    for plate in grid:
-        colors = [s.color for s in plate.slices]
-        if colors:
-            first = colors[0]
-            if any(c != first for c in colors):
-                h += 1
-    return h
+    # Heurística simples: contar pratos não vazios e mal organizados
+    return sum(
+        1 for plate in grid
+        if len(plate.slices) > 0 and any(s.color != plate.slices[0].color for s in plate.slices)
+    )
 
 def astar_bot_solver(grid, queue, apply_moves=False):
-    from copy import deepcopy
-    from game.core import CakeSlice, Plate, CakeGame
-
-    start_state = (deepcopy(grid), deepcopy(queue))
     visited = set()
     heap = []
 
-    # Cada item: (f_score, g_score, grid, queue, path)
     initial_h = heuristic(grid)
-    heapq.heappush(heap, (initial_h, 0, start_state[0], start_state[1], []))
+    heapq.heappush(heap, (initial_h, 0, deepcopy(grid), deepcopy(queue), []))
 
     while heap:
-        f_score, g_score, grid, queue, path = heapq.heappop(heap)
+        f_score, g_score, current_grid, current_queue, path = heapq.heappop(heap)
 
-        state_id = str([[s.color for s in p.slices] for p in grid]) + str(queue)
+        state_id = str([[s.color for s in p.slices] for p in current_grid]) + str(current_queue)
         if state_id in visited:
             continue
         visited.add(state_id)
 
-        if all(len(p.slices) == 0 or all(s.color == p.slices[0].color for s in p.slices) for p in grid):
-            # Objetivo atingido
+        # Check goal state (opcional, se quiseres parar quando tudo tiver cores organizadas)
+        if all(len(p.slices) == 0 or all(s.color == p.slices[0].color for s in p.slices) for p in current_grid):
             if apply_moves and path:
-                return [path[0]]
+                return [path[0]]  # Aplica só o primeiro movimento
             return path
 
-        for qi, plate in queue[:3]:  # usar apenas os 3 primeiros
-            for gi, target in enumerate(grid):
-                if len(target.slices) == 0:
-                    new_grid = deepcopy(grid)
-                    new_queue = deepcopy(queue)
-                    plate_copy = list(plate)
-                    new_grid[gi].slices.extend([CakeSlice(c, 1) for c in plate_copy])
-                    new_queue.pop(qi)
+        for qi, plate in queue[:3]:  # só os 3 primeiros pratos
+            for gi, cell in enumerate(current_grid):
+                if len(cell.slices) > 0:  # só permite em pratos vazios
+                    continue
+                if len(plate) > 6:
+                    continue
 
-                    new_path = path + [(qi, gi)]
-                    g_new = g_score + 1
-                    h_new = heuristic(new_grid)
-                    f_new = g_new + h_new
+                new_grid = deepcopy(current_grid)
+                new_queue = deepcopy(queue)
+                plate_copy = list(plate)
 
-                    heapq.heappush(heap, (f_new, g_new, new_grid, new_queue, new_path))
+                new_grid[gi].slices.extend([CakeSlice(c, 1) for c in plate_copy])
+                new_queue.pop(qi)
+
+                new_path = path + [(qi, gi)]
+                g_new = g_score + 1
+                h_new = heuristic(new_grid)
+                f_new = g_new + h_new
+
+                heapq.heappush(heap, (f_new, g_new, new_grid, new_queue, new_path))
 
     return []
-
 
 def simulate_merges(grid):
     changed = True
@@ -256,11 +250,8 @@ def simulate_merges(grid):
                 if all(c == colors[0] for c in colors):
                     plate.slices.clear()
                     changed = True
-        # Aqui podes chamar outras funções de merge se tiveres, ex:
-        # merge_adjacent_plates(grid)
-
 # def bfs_bot_solver(grid, queue, apply_moves=False):
-        from game.core import merge_all_possible_slices
+        
 #     initial_state = (deepcopy(grid), deepcopy(queue), [])
 #     queue_bfs = deque([initial_state])
 #     visited = set()
