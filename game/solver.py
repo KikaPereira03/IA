@@ -3,18 +3,20 @@ import copy
 from game.utils import evaluate_board, CakeSlice
 from collections import deque
 from copy import deepcopy
+from game.models import CakeSlice
+from copy import deepcopy
 #from game.core import merge_all_possible_slices
 
 
 
 class SearchNode:
-    def __init__(self, state, parent=None, action=None, cost=0, heuristic=0):
+    def __init__(self, state, parent=None, action=None, cost=0, heuristic=0, use_greedy=False):
         self.state = state  # A CakeGame instance
         self.parent = parent  # The SearchNode we came from
         self.action = action  # A tuple like (from_idx, to_idx)
         self.cost = cost  # g(n)
         self.heuristic = heuristic  # h(n)
-        self.f_score = cost + heuristic  # f(n) = g(n) + h(n)
+        self.f_score = heuristic if use_greedy else cost + heuristic  # f(n)
 
     def __lt__(self, other):
         return self.f_score < other.f_score
@@ -29,11 +31,12 @@ def reconstruct_path(node):
     return path
 
 
-def a_star_solver(initial_game, heuristic_fn):
+def generic_solver(initial_game, heuristic_fn, use_greedy=False):
     start_node = SearchNode(
         state=copy.deepcopy(initial_game),
         cost=0,
-        heuristic=heuristic_fn(initial_game)
+        heuristic=heuristic_fn(initial_game),
+        use_greedy=use_greedy
     )
 
     open_list = []
@@ -65,17 +68,25 @@ def a_star_solver(initial_game, heuristic_fn):
                     new_state = copy.deepcopy(current.state)
                     new_state.move_slices(from_idx, to_idx, len(group))
                     new_state.merge_all_possible_slices()
-                    h = heuristic_fn(new_state)
+                    new_cost = current.cost + 1
+                    new_heuristic = heuristic_fn(new_state)
                     new_node = SearchNode(
                         state=new_state,
                         parent=current,
                         action=(from_idx, to_idx),
-                        cost=current.cost + 1,
-                        heuristic=h
+                        cost=new_cost,
+                        heuristic=new_heuristic,
+                        use_greedy=use_greedy
                     )
                     heapq.heappush(open_list, new_node)
 
     return None  # No solution found
+
+def a_star_solver(initial_game, heuristic_fn):
+    return generic_solver(initial_game, heuristic_fn, use_greedy=False)
+
+def greedy_solver(initial_game, heuristic_fn):
+    return generic_solver(initial_game, heuristic_fn, use_greedy=True)
 
 class GameState:
     def __init__(self, grid, queue, path=None):
@@ -191,76 +202,223 @@ def greedy_bot_solver(grid, queue, apply_moves=False):
 import heapq
 
 def heuristic(grid):
-    # Heurística: número de fatias mal organizadas
-    h = 0
+    """Simple heuristic: count mixed-color plates"""
+    h_score = 0
     for plate in grid:
-        colors = [s.color for s in plate.slices]
-        if colors:
-            first = colors[0]
-            if any(c != first for c in colors):
-                h += 1
-    return h
+        if plate.slices:
+            colors = set(s.color for s in plate.slices)
+            if len(colors) > 1:
+                h_score += 1
+    return h_score
 
 def astar_bot_solver(grid, queue, apply_moves=False):
+    """
+    Pure A* search algorithm for finding optimal cake placements.
+    Optimized for the cake game with better state representation and heuristics.
+    
+    Args:
+        grid: List of Plate objects representing the current game grid
+        queue: List of (index, plate_data) tuples where plate_data is a list of color chars
+        apply_moves: Whether to return only the first move or all moves
+    
+    Returns:
+        List containing a single (queue_index, grid_index) move
+    """
+    import heapq
     from copy import deepcopy
-    from game.core import CakeSlice, Plate, CakeGame
-
-    start_state = (deepcopy(grid), deepcopy(queue))
-    visited = set()
-    heap = []
-
-    # Cada item: (f_score, g_score, grid, queue, path)
-    initial_h = heuristic(grid)
-    heapq.heappush(heap, (initial_h, 0, start_state[0], start_state[1], []))
-
-    while heap:
-        f_score, g_score, grid, queue, path = heapq.heappop(heap)
-
-        state_id = str([[s.color for s in p.slices] for p in grid]) + str(queue)
-        if state_id in visited:
+    from game.models import CakeSlice
+    
+    # Debug information
+    print(f"A* search started")
+    print(f"Queue received: {queue}")
+    
+    # Handle empty grid as a special case for better performance
+    empty_slots = [i for i, plate in enumerate(grid) if not plate.slices]
+    if all(not plate.slices for plate in grid) and queue:
+        print(f"Initial empty grid detected - using optimized first move")
+        return [(queue[0][0], empty_slots[0])]
+    
+    # Initialize open list (priority queue) and closed set
+    open_list = []
+    closed_set = set()
+    
+    # Initial state
+    initial_state = {
+        'grid': deepcopy(grid),
+        'queue': deepcopy(queue),
+        'path': [],
+        'g_score': 0,
+    }
+    
+    # Calculate initial heuristic
+    h_score = calculate_heuristic(initial_state)
+    f_score = h_score  # f = g + h, but g=0 initially
+    
+    # Add to open list: (f_score, tiebreaker, state)
+    state_id = 0  # Used for tiebreaking when f_scores are equal
+    heapq.heappush(open_list, (f_score, state_id, initial_state))
+    
+    # Track expansions
+    expansions = 0
+    max_expansions = 2000  # Increased to handle more complex states
+    
+    # Main A* search loop
+    while open_list and expansions < max_expansions:
+        expansions += 1
+        
+        # Get state with lowest f_score
+        current_f, _, current_state = heapq.heappop(open_list)
+        
+        # Extract components
+        current_grid = current_state['grid']
+        current_queue = current_state['queue']
+        current_path = current_state['path']
+        current_g = current_state['g_score']
+        
+        # Only log every 100 expansions to reduce console spam
+        if expansions % 100 == 0:
+            print(f"Expanded {expansions} states, current f_score: {current_f}")
+        
+        # Create a state signature for the closed set
+        grid_signature = tuple(tuple(s.color for s in p.slices) if p.slices else () 
+                              for p in current_grid)
+        queue_signature = tuple((i, tuple(colors)) for i, colors in current_queue[:3])
+        state_signature = (grid_signature, queue_signature)
+        
+        # Skip if we've seen this state before
+        if state_signature in closed_set:
             continue
-        visited.add(state_id)
-
-        if all(len(p.slices) == 0 or all(s.color == p.slices[0].color for s in p.slices) for p in grid):
-            # Objetivo atingido
-            if apply_moves and path:
-                return [path[0]]
-            return path
-
-        for qi, plate in queue[:3]:  # usar apenas os 3 primeiros
-            for gi, target in enumerate(grid):
-                if len(target.slices) == 0:
-                    new_grid = deepcopy(grid)
-                    new_queue = deepcopy(queue)
-                    plate_copy = list(plate)
-                    new_grid[gi].slices.extend([CakeSlice(c, 1) for c in plate_copy])
-                    new_queue.pop(qi)
-
-                    new_path = path + [(qi, gi)]
-                    g_new = g_score + 1
-                    h_new = heuristic(new_grid)
-                    f_new = g_new + h_new
-
-                    heapq.heappush(heap, (f_new, g_new, new_grid, new_queue, new_path))
-
+            
+        # Add to closed set
+        closed_set.add(state_signature)
+        
+        # Check if we've reached a goal state
+        if is_goal_state(current_grid, current_queue):
+            print(f"A* found optimal solution after {expansions} expansions!")
+            if apply_moves:
+                return [current_path[0]] if current_path else []
+            return current_path
+            
+        # Generate successor states by trying all valid moves
+        for q_idx, (queue_pos, cake_colors) in enumerate(current_queue[:3]):  # First 3 visible
+            # Find all empty plates - this is the only valid move in this game
+            for g_idx, plate in enumerate(current_grid):
+                if not plate.slices:
+                    # Create new game state
+                    new_grid = deepcopy(current_grid)
+                    new_queue = deepcopy(current_queue)
+                    
+                    # Apply move - place cake on plate
+                    new_grid[g_idx].slices.extend([CakeSlice(color, 1) for color in cake_colors])
+                    new_queue.pop(q_idx)
+                    
+                    # Create new state
+                    new_state = {
+                        'grid': new_grid,
+                        'queue': new_queue,
+                        'path': current_path + [(queue_pos, g_idx)],
+                        'g_score': current_g + 1
+                    }
+                    
+                    # Calculate new scores
+                    new_h = calculate_heuristic(new_state)
+                    new_f = new_state['g_score'] + new_h
+                    
+                    # Add to open list
+                    state_id += 1
+                    heapq.heappush(open_list, (new_f, state_id, new_state))
+    
+    print(f"A* search exhausted after {expansions} expansions")
+    
+    # If we reached the expansion limit but have explored some valid paths,
+    # return the best move we've found so far
+    if open_list:
+        best_f, _, best_state = heapq.heappop(open_list)
+        if best_state['path']:
+            print(f"Returning best partial solution with f_score={best_f}")
+            return [best_state['path'][0]] if apply_moves else best_state['path']
+    
+    # Last resort: If there are still empty plates and queue items, make a simple move
+    empty_slots = [i for i, plate in enumerate(grid) if not plate.slices]
+    if empty_slots and queue:
+        print(f"Falling back to simple placement - {len(empty_slots)} empty slots available")
+        return [(queue[0][0], empty_slots[0])]
+    
+    print("A* could not find any valid moves")
     return []
 
 
-def simulate_merges(grid):
-    changed = True
-    while changed:
-        changed = False
-        for plate in grid:
-            if len(plate.slices) == 6:
-                colors = [s.color for s in plate.slices]
-                if all(c == colors[0] for c in colors):
-                    plate.slices.clear()
-                    changed = True
-        # Aqui podes chamar outras funções de merge se tiveres, ex:
-        # merge_adjacent_plates(grid)
+def calculate_heuristic(state):
+    grid = state['grid']
+    queue = state['queue']
+    
+    h_score = 0
+    
+    # Penalty for remaining cakes in queue (directly affects distance to goal)
+    h_score += len(queue) * 2
+    
+    # Process all plates
+    for plate in grid:
+        if not plate.slices:
+            continue
+            
+        # Get color distribution
+        color_counts = {}
+        for slice in plate.slices:
+            color_counts[slice.color] = color_counts.get(slice.color, 0) + 1
+            
+        if len(color_counts) > 1:
+            # Mixed color plate - worse situation
+            h_score += len(color_counts) * 5
+            
+            # Penalty based on how mixed the plate is
+            dominant_color = max(color_counts, key=color_counts.get)
+            dominant_count = color_counts[dominant_color]
+            
+            # Calculate 'purity' - how close to single-color the plate is
+            for color, count in color_counts.items():
+                if color != dominant_color:
+                    h_score += count * 2  # Higher penalty for non-dominant colors
+        else:
+            # Single color plate - good situation
+            color = next(iter(color_counts))
+            count = color_counts[color]
+            
+            # Give bonus for plates close to completion
+            if count == 6:
+                h_score -= 10  # Big bonus for completed plate
+            elif count == 5:
+                h_score -= 8   # Almost there
+            elif count == 4:
+                h_score -= 6   # Getting close
+            elif count == 3:
+                h_score -= 3   # On the way
+    
+    # Bonus for empty plates (more placement options)
+    empty_count = sum(1 for plate in grid if not plate.slices)
+    h_score -= empty_count  # Slight bonus for having empty plates
+    
+    return h_score
+
+
+def is_goal_state(grid, queue):
+    # If queue still has items, we haven't reached the goal
+    if queue:
+        return False
+        
+    # Check all plates are properly sorted
+    for plate in grid:
+        if plate.slices:
+            colors = set(slice.color for slice in plate.slices)
+            if len(colors) > 1:
+                # Found a mixed-color plate, not a goal state
+                return False
+    
+    # Queue is empty and all plates are sorted
+    return True
 
 # def bfs_bot_solver(grid, queue, apply_moves=False):
-        from game.core import merge_all_possible_slices
+#        from game.core import merge_all_possible_slices
 #     initial_state = (deepcopy(grid), deepcopy(queue), [])
 #     queue_bfs = deque([initial_state])
 #     visited = set()

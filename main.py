@@ -566,36 +566,8 @@ class CakeGameUI:
 
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_s:
-                        while self.game.queue_data:
-                            grid = self.game.plates
-
-                            # Enviar os 3 primeiros pratos com índices reais
-                            queue = list(enumerate(self.game.queue_data[:3]))
-
-                            moves = greedy_bot_solver(grid, queue, apply_moves=True)
-                            real_index, g_index = moves[0]
-                            print("Fila antes da jogada:")
-                            for i, prato in enumerate(self.game.queue_data[:3]):
-                                print(f"  {i}: {prato}")
-
-
-                            plate = self.game.queue_data.pop(real_index)
-                            self.queue_plates = [
-                                [CakeSlice(color, 1) for color in reversed(plate)]
-                                for plate in self.game.queue_data[:self.queue_slots]
-                            ]
-
-                            print(f"🤖 Bot colocou prato real {real_index} ({plate}) na célula {g_index}")
-                            
-                            grid[g_index].slices.extend([CakeSlice(color, 1) for color in plate])
-                            self.game._check_plate_completion(g_index)
-                            self.game.merge_all_possible_slices()
-                            if self.check_level_completion():
-                                break  # ← Para o bot
-
-                            pygame.time.delay(800)
-                            self.draw()
-
+                        if self.bot_algorithm:
+                            self.run_solver_with_algorithm(self.bot_algorithm)
 
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     result = self.handle_click(event.pos)
