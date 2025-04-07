@@ -3,9 +3,6 @@ from typing import Tuple
 from game.models import CakeSlice
 
 
-
-
-
 # Draw text to a surface
 def draw_text(surface: pygame.Surface, text: str, pos: Tuple[int, int], 
               font: pygame.font.Font, color: Tuple[int, int, int] = (0, 0, 0)):

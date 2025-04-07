@@ -1,8 +1,9 @@
 import heapq
 import copy
-from game.core import CakeSlice, Plate
-from copy import deepcopy
 from game.utils import evaluate_board, CakeSlice
+from collections import deque
+from copy import deepcopy
+#from game.core import merge_all_possible_slices
 
 
 
@@ -167,7 +168,6 @@ def evaluate_best_placement(grid, queue):
     return best_move
 
 
-
 def greedy_bot_solver(grid, queue, apply_moves=False):
     best_score = -float('inf')
     best_move = (-1, -1)
@@ -187,3 +187,148 @@ def greedy_bot_solver(grid, queue, apply_moves=False):
                 best_move = (q_index, g_index)
 
     return [best_move]
+
+import heapq
+
+def heuristic(grid):
+    # Heurística: número de fatias mal organizadas
+    h = 0
+    for plate in grid:
+        colors = [s.color for s in plate.slices]
+        if colors:
+            first = colors[0]
+            if any(c != first for c in colors):
+                h += 1
+    return h
+
+def astar_bot_solver(grid, queue, apply_moves=False):
+    from copy import deepcopy
+    from game.core import CakeSlice, Plate, CakeGame
+
+    start_state = (deepcopy(grid), deepcopy(queue))
+    visited = set()
+    heap = []
+
+    # Cada item: (f_score, g_score, grid, queue, path)
+    initial_h = heuristic(grid)
+    heapq.heappush(heap, (initial_h, 0, start_state[0], start_state[1], []))
+
+    while heap:
+        f_score, g_score, grid, queue, path = heapq.heappop(heap)
+
+        state_id = str([[s.color for s in p.slices] for p in grid]) + str(queue)
+        if state_id in visited:
+            continue
+        visited.add(state_id)
+
+        if all(len(p.slices) == 0 or all(s.color == p.slices[0].color for s in p.slices) for p in grid):
+            # Objetivo atingido
+            if apply_moves and path:
+                return [path[0]]
+            return path
+
+        for qi, plate in queue[:3]:  # usar apenas os 3 primeiros
+            for gi, target in enumerate(grid):
+                if len(target.slices) == 0:
+                    new_grid = deepcopy(grid)
+                    new_queue = deepcopy(queue)
+                    plate_copy = list(plate)
+                    new_grid[gi].slices.extend([CakeSlice(c, 1) for c in plate_copy])
+                    new_queue.pop(qi)
+
+                    new_path = path + [(qi, gi)]
+                    g_new = g_score + 1
+                    h_new = heuristic(new_grid)
+                    f_new = g_new + h_new
+
+                    heapq.heappush(heap, (f_new, g_new, new_grid, new_queue, new_path))
+
+    return []
+
+
+def simulate_merges(grid):
+    changed = True
+    while changed:
+        changed = False
+        for plate in grid:
+            if len(plate.slices) == 6:
+                colors = [s.color for s in plate.slices]
+                if all(c == colors[0] for c in colors):
+                    plate.slices.clear()
+                    changed = True
+        # Aqui podes chamar outras funções de merge se tiveres, ex:
+        # merge_adjacent_plates(grid)
+
+# def bfs_bot_solver(grid, queue, apply_moves=False):
+        from game.core import merge_all_possible_slices
+#     initial_state = (deepcopy(grid), deepcopy(queue), [])
+#     queue_bfs = deque([initial_state])
+#     visited = set()
+
+#     def serialize(g, q):
+#         return str([[s.color for s in plate.slices] for plate in g]) + str(q)
+
+#     while queue_bfs:
+#         g, q, path = queue_bfs.popleft()
+#         state_key = serialize(g, q)
+#         if state_key in visited:
+#             continue
+#         visited.add(state_key)
+
+#         for q_index, plate in enumerate(q[:3]):
+#             for g_index, cell in enumerate(g):
+#                 if len(cell.slices) + len(plate) > 6:
+#                     continue  # não cabe
+
+#                 new_g = deepcopy(g)
+#                 new_q = deepcopy(q)
+#                 new_path = list(path)
+
+#                 new_g[g_index].slices.extend([CakeSlice(c, 1) for c in plate])
+#                 merge_all_possible_slices(new_g)
+#                 del new_q[q_index]
+#                 new_path.append((q_index, g_index))
+
+#                 if not new_q:
+#                     return new_path if apply_moves else [new_path[0]]
+
+#                 queue_bfs.append((new_g, new_q, new_path))
+
+#     return []
+
+
+# def dfs_bot_solver(grid, queue, apply_moves=False):
+#     initial_state = (deepcopy(grid), deepcopy(queue), [])
+#     stack_dfs = [(initial_state)]
+#     visited = set()
+
+#     def serialize(g, q):
+#         return str([[s.color for s in plate.slices] for plate in g]) + str(q)
+
+#     while stack_dfs:
+#         g, q, path = stack_dfs.pop()
+#         state_key = serialize(g, q)
+#         if state_key in visited:
+#             continue
+#         visited.add(state_key)
+
+#         for q_index, plate in enumerate(q[:3]):
+#             for g_index, cell in enumerate(g):
+#                 if len(cell.slices) + len(plate) > 6:
+#                     continue  # não cabe
+
+#                 new_g = deepcopy(g)
+#                 new_q = deepcopy(q)
+#                 new_path = list(path)
+
+#                 new_g[g_index].slices.extend([CakeSlice(c, 1) for c in plate])
+#                 merge_all_possible_slices(new_g)
+#                 del new_q[q_index]
+#                 new_path.append((q_index, g_index))
+
+#                 if not new_q:
+#                     return new_path if apply_moves else [new_path[0]]
+
+#                 stack_dfs.append((new_g, new_q, new_path))
+
+#     return []

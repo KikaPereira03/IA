@@ -6,16 +6,20 @@ import os
 from typing import List, Tuple, Optional
 from game.core import Plate, CakeGame, CakeSlice
 from game.solver import solve_game
+#from game.solver import greedy_bot_solver, bfs_bot_solver, dfs_bot_solver, astar_bot_solver
 from game.solver import greedy_bot_solver
-from game.solver import evaluate_best_placement  # vamos criar esta função a seguir
+from game.solver import astar_bot_solver
+
+# from game.solver import bfs_bot_solver
+# from game.solver import dfs_bot_solver
+from game.solver import evaluate_best_placement
 from game.models import CakeSlice
 
 
-
 class CakeGameUI:
-    # Initialize the game UI
-    def __init__(self, level_file="game/levels/level1.txt", width: int = 4, height: int = 5, max_capacity=6):
+    def __init__(self, level_file="game/levels/level1.txt", width: int = 4, height: int = 5, max_capacity=6, bot_algorithm=None):
         pygame.init()
+        self.bot_algorithm = bot_algorithm
         self.level_file = level_file
         match = re.search(r'level(\d+)', level_file)
         self.current_level_number = int(match.group(1)) if match else 1
@@ -62,6 +66,9 @@ class CakeGameUI:
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont('Arial', 24)
         self.big_font = pygame.font.SysFont('Arial', 36)
+
+        if self.bot_algorithm:
+            self.run_solver_with_algorithm(self.bot_algorithm)
 
     # Get plate position on grid
     def get_cell_rect(self, plate_idx: int) -> pygame.Rect:
@@ -513,7 +520,41 @@ class CakeGameUI:
 
         print("✅ Bot terminou.")
 
+    def run_solver_with_algorithm(self, algorithm):
+            solver_map = {
+                'greedy': greedy_bot_solver,
+                # 'bfs': bfs_bot_solver,
+                # 'dfs': dfs_bot_solver,
+                'a*': astar_bot_solver
+            }
 
+            solver = solver_map.get(algorithm.lower())
+            if solver:
+                print(f"⚙️ Bot ({algorithm}) a correr...")
+                while self.game.queue_data:
+                    queue = list(enumerate(self.game.queue_data[:3]))
+                    moves = solver(self.game.plates, queue, apply_moves=True)
+
+                    if not moves:
+                        print("❌ Bot não encontrou movimentos.")
+                        break
+
+                    q_index, g_index = moves[0]
+                    plate = self.game.queue_data.pop(q_index)
+                    self.queue_plates = [
+                        [CakeSlice(color, 1) for color in reversed(p)]
+                        for p in self.game.queue_data[:self.queue_slots]
+                    ]
+
+                    print(f"🤖 Bot colocou prato real {q_index} ({plate}) na célula {g_index}")
+                    self.game.plates[g_index].slices.extend([CakeSlice(color, 1) for color in plate])
+                    self.game._check_plate_completion(g_index)
+                    self.game.merge_all_possible_slices()
+                    if self.check_level_completion():
+                        break
+                    pygame.time.delay(800)
+                    self.draw()
+                print("✅ Bot terminou.")
 
     # Run the game loop
     def run(self):
