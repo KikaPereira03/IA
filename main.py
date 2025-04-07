@@ -6,12 +6,10 @@ import os
 from typing import List, Tuple, Optional
 from game.core import Plate, CakeGame, CakeSlice
 from game.solver import solve_game
-#from game.solver import greedy_bot_solver, bfs_bot_solver, dfs_bot_solver, astar_bot_solver
 from game.solver import greedy_bot_solver
-from game.solver import astar_bot_solver
-
+# from game.solver import astar_bot_solver
 # from game.solver import bfs_bot_solver
-# from game.solver import dfs_bot_solver
+from game.solver import dfs_bot_solver
 from game.solver import evaluate_best_placement
 from game.models import CakeSlice
 
@@ -524,8 +522,8 @@ class CakeGameUI:
             solver_map = {
                 'greedy': greedy_bot_solver,
                 # 'bfs': bfs_bot_solver,
-                # 'dfs': dfs_bot_solver,
-                'a*': astar_bot_solver
+                'dfs': dfs_bot_solver,
+                # 'a*': astar_bot_solver
             }
 
             solver = solver_map.get(algorithm.lower())
@@ -533,7 +531,8 @@ class CakeGameUI:
                 print(f"⚙️ Bot ({algorithm}) a correr...")
                 while self.game.queue_data:
                     queue = list(enumerate(self.game.queue_data[:3]))
-                    moves = solver(self.game.plates, queue, apply_moves=True)
+                    moves = solver(self.game, apply_moves=True)
+
 
                     if not moves:
                         print("❌ Bot não encontrou movimentos.")
