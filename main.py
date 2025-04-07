@@ -6,6 +6,10 @@ import os
 from typing import List, Tuple, Optional
 from game.core import Plate, CakeGame, CakeSlice
 from game.solver import solve_game
+from game.solver import greedy_bot_solver
+from game.solver import evaluate_best_placement  # vamos criar esta função a seguir
+from game.models import CakeSlice
+
 
 
 class CakeGameUI:
@@ -196,6 +200,10 @@ class CakeGameUI:
             print(f"Level {self.current_level_number} completed. Transitioning to next level.")
             next_level = self.current_level_number + 1
             self.change_level(next_level)
+            if not os.path.exists(f"game/levels/level{next_level}.txt"):
+                return True  # acabou o jogo, parar bot
+
+        return False
 
 
     # Show popup when game is over 
@@ -474,45 +482,38 @@ class CakeGameUI:
 
     def get_queue_state(self):
         # Converte os pratos da fila para listas simples de cores
-        return [[slice.color for slice in plate] for plate in self.game.queue_data]
+        return [list(plate) for plate in self.game.queue_data]
+
 
     def run_solver(self):
-       
+        print("⚙️ Bot a correr...")
 
-        grid = self.get_grid_state()
-        queue = self.get_queue_state()
+        while self.game.queue_data:
+            queue = self.game.queue_data[:3]
+            grid = self.game.plates
 
-        solution = solve_game(grid, queue)
+            moves = greedy_bot_solver(grid, queue, apply_moves=True)
 
-        if solution is None:
-            print("❌ Não foi encontrada solução.")
-            return
+            if not moves:
+                print("❌ Bot não encontrou movimentos.")
+                break
 
-        print("✅ Solução encontrada. A aplicar...")
+            q_index, g_index = moves[0]
+            plate = self.game.queue_data.pop(q_index)
 
-        # Limpa o tabuleiro atual
-        for i in range(len(self.game.plates)):
-            self.game.plates[i] = Plate()
+            print(f"🤖 Bot colocou prato {q_index} na célula {g_index}")
+            grid[g_index].slices.extend([CakeSlice(color, 1) for color in plate])
 
-        # Aplica todos os movimentos da solução
-        for pos, plate in solution:
-            r, c = pos
-            idx = r * self.game.width + c
 
-            novo_prato = Plate()
-            for color in plate:
-                novo_prato.slices.append(CakeSlice(color=color, size=1))  # cada fatia com tamanho 1
+            self.game._check_plate_completion(g_index)
+            self.game.merge_all_possible_slices()
 
-            self.game.plates[idx] = novo_prato
-
-            # Se tiveres função para verificar desaparecimentos automáticos, chama aqui:
-            if hasattr(self.game, "check_plate_disappearance"):
-                self.game.check_plate_disappearance()
-
-            # Atualiza o ecrã
+            pygame.time.delay(300)
             self.draw()
-            pygame.display.flip()
-            pygame.time.wait(300)  # tempo entre jogadas (ajusta se quiseres) 
+
+        print("✅ Bot terminou.")
+
+
 
     # Run the game loop
     def run(self):
@@ -521,17 +522,51 @@ class CakeGameUI:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_s:
-                        self.run_solver()
+                        while self.game.queue_data:
+                            grid = self.game.plates
+
+                            # Enviar os 3 primeiros pratos com índices reais
+                            queue = list(enumerate(self.game.queue_data[:3]))
+
+                            moves = greedy_bot_solver(grid, queue, apply_moves=True)
+                            real_index, g_index = moves[0]
+                            print("Fila antes da jogada:")
+                            for i, prato in enumerate(self.game.queue_data[:3]):
+                                print(f"  {i}: {prato}")
+
+
+                            plate = self.game.queue_data.pop(real_index)
+                            self.queue_plates = [
+                                [CakeSlice(color, 1) for color in reversed(plate)]
+                                for plate in self.game.queue_data[:self.queue_slots]
+                            ]
+
+                            print(f"🤖 Bot colocou prato real {real_index} ({plate}) na célula {g_index}")
+                            
+                            grid[g_index].slices.extend([CakeSlice(color, 1) for color in plate])
+                            self.game._check_plate_completion(g_index)
+                            self.game.merge_all_possible_slices()
+                            if self.check_level_completion():
+                                break  # ← Para o bot
+
+                            pygame.time.delay(800)
+                            self.draw()
+
+
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     result = self.handle_click(event.pos)
-                    if result == True:  # If a popup returns True, exit to menu
+                    if result == True:
                         running = False
+
             self.draw()
             self.clock.tick(60)
+
         pygame.quit()
-        return 
+        return
+
 
 
 if __name__ == "__main__":

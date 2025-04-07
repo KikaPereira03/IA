@@ -1,5 +1,10 @@
 import heapq
 import copy
+from game.core import CakeSlice, Plate
+from copy import deepcopy
+from game.utils import evaluate_board, CakeSlice
+
+
 
 class SearchNode:
     def __init__(self, state, parent=None, action=None, cost=0, heuristic=0):
@@ -47,7 +52,7 @@ def a_star_solver(initial_game, heuristic_fn):
         if current.state.is_goal():
             return reconstruct_path(current)
 
-        for from_idx, from_plate in enumerate(current.state.plates):
+        for from_idx, from_plate in enumerate(current.state.queue):
             group = current.state.get_top_group(from_plate)
             if not group:
                 continue
@@ -78,6 +83,18 @@ class GameState:
         self.queue = [p.copy() for p in queue]
         self.path = path or []
 
+    def get_top_group(self, plate):
+        if not plate:
+            return []
+        top_color = plate[-1]
+        group = []
+        for slice in reversed(plate):
+            if slice == top_color:
+                group.append(slice)
+            else:
+                break
+        return group
+    
     def is_goal(self):
         return all(cell is None for row in self.grid for cell in row) and not self.queue
 
@@ -124,3 +141,49 @@ def solve_game(grid, queue):
     initial_state = GameState(grid, queue)
     path = a_star_solver(initial_state, heuristic_fn=simple_heuristic)
     return path
+
+
+def evaluate_best_placement(grid, queue):
+    best_score = -float("inf")
+    best_move = (-1, -1)  # (queue_index, grid_index)
+
+    for q_index, plate in enumerate(queue[:3]):  # Só os 3 primeiros pratos visíveis
+        for g_index, cell in enumerate(grid):
+            if len(cell.slices) + len(plate.slices) > 6:
+                continue
+
+            if not cell.slices:
+                score = 1
+            else:
+                top_color = cell.slices[-1].color
+                same = sum(1 for s in plate.slices if s.color == top_color)
+                diff = sum(1 for s in plate.slices if s.color != top_color)
+                score = same * 2 - diff
+
+            if score > best_score:
+                best_score = score
+                best_move = (q_index, g_index)
+
+    return best_move
+
+
+
+def greedy_bot_solver(grid, queue, apply_moves=False):
+    best_score = -float('inf')
+    best_move = (-1, -1)
+
+    for q_index, plate in queue:
+        for g_index, cell in enumerate(grid):
+            if len(cell.slices) + len(plate) > 6:
+                continue
+
+            temp_grid = deepcopy(grid)
+            temp_grid[g_index].slices.extend([CakeSlice(c, 1) for c in plate])
+
+            score = evaluate_board(temp_grid)
+
+            if score > best_score:
+                best_score = score
+                best_move = (q_index, g_index)
+
+    return [best_move]

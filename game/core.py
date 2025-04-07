@@ -3,14 +3,10 @@ from typing import List, Tuple, Optional
 from game.utils import load_level_file
 from dataclasses import dataclass
 import os
+from game.models import CakeSlice
 
 @dataclass
-class CakeSlice:
-    color: str # Color identifier (e.g. 'R', 'G', 'B')
-    size: int
 
-    def __str__(self):
-        return f"{self.color}{self.size}"
 
 class Plate:
     def __init__(self, max_capacity: int = 6):
