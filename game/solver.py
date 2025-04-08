@@ -358,24 +358,19 @@ def greedy_bot_solver(grid, queue, apply_moves=False, game_instance=None):
 
     for q_index, plate in queue:
         for g_index, cell in enumerate(grid):
-            # Only consider EMPTY plates
             if len(cell.slices) > 0:
                 continue
                 
-            # Check if cake would fit in the plate
-            if len(plate) > 6:  # Max capacity check
+            if len(plate) > 6: 
                 continue
 
             # Create a temporary grid with this move applied
             temp_grid = deepcopy(grid)
             temp_grid[g_index].slices.extend([CakeSlice(c, 1) for c in plate])
 
-            # Evaluate with enhanced function
+            # Evaluate
             move = (q_index, g_index)
             score = evaluate_board(temp_grid, game_instance, move)
-
-            # Debug - print score for this move
-            print(f"Move queue {q_index} to grid {g_index}: score = {score}")
 
             if score > best_score:
                 best_score = score

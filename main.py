@@ -5,6 +5,7 @@ import os
 from game.core import CakeGame, CakeSlice
 from game.solver import greedy_bot_solver, astar_bot_solver
 from game.models import CakeSlice
+from game.utils import save_solver_results
 
 
 class CakeGameUI:
@@ -41,7 +42,7 @@ class CakeGameUI:
         self.text_color = (80, 80, 100)
 
         # Hint button properties
-        self.hint_button_rect = pygame.Rect(self.screen_width - 120, 40, 100, 40)
+        self.hint_button_rect = pygame.Rect(self.screen_width - 300, 650, 100, 40)
         self.hint_active = False
         self.hint_timer = 0
         self.hint_duration = 2000  
@@ -543,8 +544,6 @@ class CakeGameUI:
         solver_map = {
             'greedy': greedy_bot_solver,
             'a*': astar_bot_solver,
-            # 'bfs': bfs_bot_solver,
-            # 'dfs': dfs_bot_solver,
         }
 
         solver = solver_map.get(algorithm.lower())
