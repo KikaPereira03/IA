@@ -1,11 +1,12 @@
 import pygame
+import time
 import re
 import sys
 import os
 from game.core import CakeGame, CakeSlice
-from game.solver import greedy_bot_solver, astar_bot_solver
+from game.solver import greedy_bot_solver, astar_bot_solver, metrics
 from game.models import CakeSlice
-
+from game.metrics_collector import MetricsCollector
 
 class CakeGameUI:
     def __init__(self, level_file="game/levels/level1.txt", width=4, height=5, max_capacity=6, bot_algorithm=None):
@@ -540,6 +541,15 @@ class CakeGameUI:
         print("Bot finished.")
 
     def run_solver_with_algorithm(self, algorithm):
+        """
+        Run the selected solver algorithm with performance tracking
+        """
+        from game.metrics_collector import MetricsCollector
+        from game.solver import metrics, greedy_bot_solver, astar_bot_solver
+        import os
+        import time
+        import re
+
         solver_map = {
             'greedy': greedy_bot_solver,
             'a*': astar_bot_solver,
@@ -550,19 +560,58 @@ class CakeGameUI:
             print(f"Unknown solver: {algorithm}")
             return
 
-        print(f"Bot running ({algorithm})...")
+        # Extract level name from level file path
+        match = re.search(r'level(\d+)', self.level_file)
+        current_level_name = f"level{match.group(1)}" if match else os.path.basename(self.level_file)
+        current_level = self.current_level_number
 
+        print(f"Bot running ({algorithm})...")
+        
+        # Start fresh metrics tracking
+        metrics.reset()
+        metrics.start_tracking(current_level_name, algorithm)
+        
+        # Track steps for this specific run
+        steps_taken = 0
+        
+        # Run the solver for the current level
         while self.game.queue_data:
+            # Check if level has changed (this indicates previous level was completed)
+            if current_level != self.current_level_number:
+                # Save metrics for the completed level
+                print(f"\nLevel {current_level_name} completed.")
+                metrics.stop_tracking(self.game.score)
+                metrics.steps_taken = steps_taken
+                metrics.print_summary()
+                
+                # Set up for the new level
+                current_level = self.current_level_number
+                current_level_name = f"level{current_level}"
+                print(f"\nStarting level {current_level_name}...")
+                
+                # Reset metrics for new level
+                metrics.reset()
+                metrics.start_tracking(current_level_name, algorithm)
+                steps_taken = 0
+            
+            # Run one step of the solver
             queue = list(enumerate(self.game.queue_data[:3]))
-            moves = solver(self.game.plates, queue, apply_moves=True)
+            moves = solver(self.game.plates, queue, apply_moves=True, game_instance=self.game)
 
             if not moves:
                 print("No valid moves.")
                 break
 
             q_index, g_index = moves[0]
+            if q_index == -1:  # Invalid move
+                print("Invalid move returned by solver.")
+                break
+                
+            # Track this step
+            steps_taken += 1
+            
+            # Apply the move
             plate = self.game.queue_data.pop(q_index)
-
             self.queue_plates = [
                 [CakeSlice(color, 1) for color in reversed(p)]
                 for p in self.game.queue_data[:self.queue_slots]
@@ -573,12 +622,29 @@ class CakeGameUI:
             self.game._check_plate_completion(g_index)
             self.game.merge_all_possible_slices()
 
-            if self.check_level_completion():
+            # Check if level is completed
+            level_completed = self.check_level_completion()
+            
+            # If level is completed but we're still in the same level (didn't change to next)
+            # this means we're on the last level or no more levels available
+            if level_completed and current_level == self.current_level_number:
+                print(f"\nFinal level {current_level_name} completed.")
+                metrics.stop_tracking(self.game.score)
+                metrics.steps_taken = steps_taken
+                metrics.print_summary()
                 break
 
+            # Delay for visualization
             pygame.time.delay(800)
             self.draw()
-
+        
+        # Make sure to save metrics for the current level if we exit the loop without completion
+        if metrics.start_time is not None:
+            print(f"\nLevel {current_level_name} finished.")
+            metrics.stop_tracking(self.game.score)
+            metrics.steps_taken = steps_taken
+            metrics.print_summary()
+        
         print("Bot finished.")
 
 

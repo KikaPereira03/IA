@@ -1,0 +1,8 @@
+Date: 2025-04-09 00:06:45
+Level: level1
+Algorithm: A*
+Final Score: 1020
+States Generated: 303641
+Steps Taken: 72
+Time Taken: 226.15 seconds
+Peak Memory Used: 137013.20 KB

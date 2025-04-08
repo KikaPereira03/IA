@@ -4,7 +4,10 @@ from copy import deepcopy
 
 from game.models import CakeSlice
 from game.utils import evaluate_board
+from game.metrics_collector import MetricsCollector
 
+# Global metrics collector instance
+metrics = MetricsCollector()
 
 # -------------------------
 # Data Structures
@@ -66,6 +69,8 @@ class GameState:
                     new_grid = self.resolve_disappear(new_grid)
                     new_state = GameState(new_grid, new_queue, self.path + [((r, c), next_plate)])
                     succs.append(new_state)
+                    # Track states generated
+                    metrics.increment_states()
         return succs
 
     def resolve_disappear(self, grid):
@@ -280,6 +285,7 @@ def generic_solver(initial_game, heuristic_fn, use_greedy=False):
     open_list = []
     heapq.heappush(open_list, start_node)
     closed_set = set()
+    metrics.increment_states()  # Count initial state
 
     while open_list:
         current = heapq.heappop(open_list)
@@ -292,7 +298,9 @@ def generic_solver(initial_game, heuristic_fn, use_greedy=False):
         closed_set.add(state_hash)
 
         if current.state.is_goal():
-            return reconstruct_path(current)
+            path = reconstruct_path(current)
+            metrics.steps_taken = len(path)
+            return path
 
         for from_idx, from_plate in enumerate(current.state.queue):
             group = current.state.get_top_group(from_plate)
@@ -317,6 +325,7 @@ def generic_solver(initial_game, heuristic_fn, use_greedy=False):
                         use_greedy=use_greedy
                     )
                     heapq.heappush(open_list, new_node)
+                    metrics.increment_states()
 
     return None  # No solution found
 
@@ -356,6 +365,7 @@ def greedy_bot_solver(grid, queue, apply_moves=False, game_instance=None):
     empty_plates = [i for i, cell in enumerate(grid) if not cell.slices]
     print(f"Evaluating moves - {len(empty_plates)} empty plates available")
 
+    evaluated_states = 0
     for q_index, plate in queue:
         for g_index, cell in enumerate(grid):
             if len(cell.slices) > 0:
@@ -367,6 +377,8 @@ def greedy_bot_solver(grid, queue, apply_moves=False, game_instance=None):
             # Create a temporary grid with this move applied
             temp_grid = deepcopy(grid)
             temp_grid[g_index].slices.extend([CakeSlice(c, 1) for c in plate])
+            evaluated_states += 1
+            metrics.increment_states()  # Track states evaluated
 
             # Evaluate
             move = (q_index, g_index)
@@ -377,6 +389,8 @@ def greedy_bot_solver(grid, queue, apply_moves=False, game_instance=None):
                 best_move = move
 
     print(f"Best move: queue {best_move[0]} to grid {best_move[1]} with score {best_score}")
+    if best_move[0] != -1:  # If we found a valid move
+        metrics.increment_steps()  # Track the step we're taking
     return [best_move]
 
 def astar_bot_solver(grid, queue, apply_moves=False):
@@ -401,6 +415,8 @@ def astar_bot_solver(grid, queue, apply_moves=False):
     empty_slots = [i for i, plate in enumerate(grid) if not plate.slices]
     if all(not plate.slices for plate in grid) and queue:
         print(f"Initial empty grid detected - using optimized first move")
+        metrics.increment_states(1)  # Count this as 1 state evaluation
+        metrics.increment_steps(1)   # Count this as 1 step
         return [(queue[0][0], empty_slots[0])]
 
     # Parameters
@@ -440,6 +456,7 @@ def astar_bot_solver(grid, queue, apply_moves=False):
         'depth': 0,
         'last_action': None
     }
+    metrics.increment_states(1)  # Count initial state
 
     # Initial heuristic evaluation
     h_score = improved_heuristic(initial_state)
@@ -519,6 +536,7 @@ def astar_bot_solver(grid, queue, apply_moves=False):
                         'depth': current_depth + 1,
                         'last_action': (queue_pos, g_idx)
                     }
+                    metrics.increment_states(1)  # Count this new state
                     
                     # Calculate new heuristic
                     new_h = improved_heuristic(new_state)
@@ -553,14 +571,16 @@ def astar_bot_solver(grid, queue, apply_moves=False):
                 relevant_plates = [(i, [s.color for s in p.slices]) for i, p in enumerate(temp_grid) if p.slices]
                 print(f"   Relevant plates after move: {relevant_plates[:3]}...")
 
-    # Return the best move found
+    # Count the steps
     if best_partial_state and best_partial_state['path']:
+        metrics.increment_steps(1)  # Count only the first step we'll take
         print(f"Found move with score improvement: +{best_partial_state['score'] - initial_score}")
         return [best_partial_state['path'][0]] if apply_moves else best_partial_state['path']
     
     # Fallback to simple placement if no good moves found
     if empty_slots and queue:
         print(f"Falling back to simple placement")
+        metrics.increment_steps(1)  # Count this fallback step
         # Try to make a smarter fallback by choosing plates with adjacent matches
         best_slot = empty_slots[0]
         best_match = -1

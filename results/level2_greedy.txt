@@ -1,0 +1,8 @@
+Date: 2025-04-09 00:00:20
+Level: level2
+Algorithm: GREEDY
+Final Score: 1140
+States Generated: 2052
+Steps Taken: 84
+Time Taken: 22.90 seconds
+Peak Memory Used: 407.64 KB
