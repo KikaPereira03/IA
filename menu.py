@@ -39,7 +39,7 @@ class CakeMenuUI:
         ]
 
         self.bot_popup_visible = False
-        self.bot_options = ["Greedy", "A*", "BFS", "DFS"]
+        self.bot_options = ["Greedy", "A*"]
         self.selected_bot = None
         self.bot_option_rects = []
 

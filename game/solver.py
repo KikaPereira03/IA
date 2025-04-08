@@ -16,9 +16,9 @@ metrics = MetricsCollector()
 class SearchNode:
     """Node class for search algorithms like A* and Greedy."""
     def __init__(self, state, parent=None, action=None, cost=0, heuristic=0, use_greedy=False):
-        self.state = state           # A CakeGame instance
-        self.parent = parent         # The SearchNode we came from
-        self.action = action         # A tuple like (from_idx, to_idx)
+        self.state = state           
+        self.parent = parent         
+        self.action = action         
         self.cost = cost             # g(n)
         self.heuristic = heuristic   # h(n)
         self.f_score = heuristic if use_greedy else cost + heuristic  # f(n)

@@ -66,7 +66,7 @@ def evaluate_board(grid, game=None, last_move=None):
             count = len(colors)
             strategic_score += count * 15
             
-            # Extra bonus for plates close to completion (6 slices)
+            # Extra bonus for plates close to completion
             if count >= 4:
                 strategic_score += (count - 3) * 20
         else:
