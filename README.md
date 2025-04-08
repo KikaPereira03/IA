@@ -69,7 +69,7 @@ python menu.py
 - Click "Start Game" to play manually.
 - Click "Bot Hint" for help from the AI.
 
-### 🤖 Bot Mode (in game)
+### Bot Mode (in game)
 
 - In the menu, click "Choose Bot".
 - Select **Greedy** or **A\*** and watch the AI play.
