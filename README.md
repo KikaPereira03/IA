@@ -18,10 +18,10 @@ The application supports both:
 We implemented two heuristic search methods:
 
 - **Greedy Best-First Search**  
-  Selects moves that give the highest immediate heuristic value. Fast but short-sighted.
+  Selects moves that give the highest immediate heuristic value.
 
 - **A\* Search**  
-  Combines actual cost with heuristic estimates for better long-term planning. More accurate but slower.
+  Combines actual cost with heuristic estimates for better long-term planning.
 
 ---
 
