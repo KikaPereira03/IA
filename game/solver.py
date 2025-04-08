@@ -1,29 +1,97 @@
 import heapq
-import copy
-from game.core import CakeGame
-from game.utils import evaluate_board, CakeSlice
-from collections import deque, Counter
+from collections import Counter, deque
 from copy import deepcopy
+
 from game.models import CakeSlice
-from copy import deepcopy
-#from game.core import merge_all_possible_slices
+from game.utils import evaluate_board
 
 
+# -------------------------
+# Data Structures
+# -------------------------
 
 class SearchNode:
+    """Node class for search algorithms like A* and Greedy."""
     def __init__(self, state, parent=None, action=None, cost=0, heuristic=0, use_greedy=False):
-        self.state = state  # A CakeGame instance
-        self.parent = parent  # The SearchNode we came from
-        self.action = action  # A tuple like (from_idx, to_idx)
-        self.cost = cost  # g(n)
-        self.heuristic = heuristic  # h(n)
+        self.state = state           # A CakeGame instance
+        self.parent = parent         # The SearchNode we came from
+        self.action = action         # A tuple like (from_idx, to_idx)
+        self.cost = cost             # g(n)
+        self.heuristic = heuristic   # h(n)
         self.f_score = heuristic if use_greedy else cost + heuristic  # f(n)
 
     def __lt__(self, other):
+        """For priority queue comparison."""
         return self.f_score < other.f_score
 
 
+class GameState:
+    """Represents a game state for search algorithms."""
+    def __init__(self, grid, queue, path=None):
+        # Deep copy to avoid sharing state between objects
+        self.grid = [row.copy() for row in grid]
+        self.queue = [p.copy() for p in queue]
+        self.path = path or []
+
+    def get_top_group(self, plate):
+        """Gets a group of same-colored slices from the top of a plate."""
+        if not plate:
+            return []
+        top_color = plate[-1]
+        group = []
+        for slice in reversed(plate):
+            if slice == top_color:
+                group.append(slice)
+            else:
+                break
+        return group
+    
+    def is_goal(self):
+        """Checks if we've reached a goal state (all plates properly sorted)."""
+        return all(cell is None for row in self.grid for cell in row) and not self.queue
+
+    def successors(self):
+        """Generates all possible successor states."""
+        succs = []
+        if not self.queue:
+            return succs
+
+        next_plate = self.queue[0]  # Current plate
+        for r in range(len(self.grid)):
+            for c in range(len(self.grid[0])):
+                if self.grid[r][c] is None:
+                    new_grid = [row.copy() for row in self.grid]
+                    new_queue = self.queue[1:]
+                    new_grid[r][c] = next_plate.copy()
+                    new_grid = self.resolve_disappear(new_grid)
+                    new_state = GameState(new_grid, new_queue, self.path + [((r, c), next_plate)])
+                    succs.append(new_state)
+        return succs
+
+    def resolve_disappear(self, grid):
+        """Resolves plates that should disappear (6 same-colored slices)."""
+        for r in range(len(grid)):
+            for c in range(len(grid[0])):
+                plate = grid[r][c]
+                if plate is not None and len(plate) == 6 and all(f == plate[0] for f in plate):
+                    grid[r][c] = None
+        return grid
+
+    def __eq__(self, other):
+        """For equality comparison."""
+        return self.grid == other.grid and self.queue == other.queue
+
+    def __hash__(self):
+        """For use in sets and as dictionary keys."""
+        return hash(str(self.grid) + str(self.queue))
+
+
+# -------------------------
+# Helper Functions
+# -------------------------
+
 def reconstruct_path(node):
+    """Reconstructs the path from start to goal."""
     path = []
     while node.parent is not None:
         path.append(node.action)
@@ -32,9 +100,178 @@ def reconstruct_path(node):
     return path
 
 
+def is_goal_state(grid, queue):
+    """Checks if the current state is a goal state."""
+    # If queue still has items, we haven't reached the goal
+    if queue:
+        return False
+        
+    # Check all plates are properly sorted
+    for plate in grid:
+        if plate.slices:
+            colors = set(slice.color for slice in plate.slices)
+            if len(colors) > 1:
+                # Found a mixed-color plate, not a goal state
+                return False
+    
+    # Queue is empty and all plates are sorted
+    return True
+
+
+def improved_simulate_merge(grid, placed_idx, current_score):
+    """Simulates merging plates after a placement."""
+    score = current_score
+    
+    # First check for plate completion at placed position
+    plate = grid[placed_idx]
+    if len(plate.slices) == 6:
+        color = plate.slices[0].color
+        if all(s.color == color for s in plate.slices):
+            score += 50  # Already got +10 for placement
+            plate.slices = []  # Clear the plate
+    
+    try:
+        # Create a temporary game object to use its get_adjacent_plates method
+        # Estimate dimensions based on grid length
+        from game.core import CakeGame
+        grid_size = len(grid)
+        grid_width = int(grid_size ** 0.5)
+        if grid_width * grid_width < grid_size:
+            grid_width += 1
+        grid_height = (grid_size + grid_width - 1) // grid_width
+        
+        temp_game = CakeGame(grid_width, grid_height)
+        adjacent_indices = temp_game.get_adjacent_plates(placed_idx)
+        
+        # Filter to ensure indices are valid
+        adjacent_indices = [idx for idx in adjacent_indices if 0 <= idx < len(grid)]
+        
+    except Exception as e:
+        print(f"Warning in adjacency calculation: {e}")
+        # Continue without merging if there's an error
+    
+    return score
+
+
+def simulate_move_colors(grid, from_idx, to_idx, color):
+    """Simulates moving slices of a specific color between plates."""
+    from_plate = grid[from_idx]
+    to_plate = grid[to_idx]
+    
+    color_indices = [i for i, s in enumerate(from_plate.slices) if s.color == color]
+    
+    if not color_indices:
+        return False
+    
+    available_space = 6 - len(to_plate.slices)  # Assuming max capacity is 6
+    
+    if available_space <= 0:
+        return False
+    
+    moved = False
+    for idx in sorted(color_indices, reverse=True)[:available_space]:
+        slice_to_move = from_plate.slices[idx]
+        to_plate.slices.append(slice_to_move)
+        from_plate.slices.pop(idx)
+        moved = True
+        
+        # Update color indices
+        color_indices = [i for i, s in enumerate(from_plate.slices) if s.color == color]
+    
+    return moved
+
+
+def simulate_merge(grid):
+    """Simplified version of merge_all_possible_slices to estimate state after merges."""
+    # First check for plate completions
+    for plate_idx, plate in enumerate(grid):
+        # Check for plate completion
+        if len(plate.slices) == 6:
+            first_color = plate.slices[0].color if plate.slices else None
+            if first_color and all(s.color == first_color for s in plate.slices):
+                plate.slices = []  # Clear the plate
+                
+    # Simple color consolidation
+    for plate_idx, plate in enumerate(grid):
+        if not plate.slices:
+            continue
+            
+        colors = [s.color for s in plate.slices]
+        if len(set(colors)) > 1:
+            # Sort slices by color to simulate some consolidation
+            plate.slices.sort(key=lambda s: s.color)
+
+
+# -------------------------
+# Heuristic Functions
+# -------------------------
+
+def improved_heuristic(state):
+    """
+    Enhanced heuristic that better guides the search toward achieving required score.
+    Lower scores are better.
+    """
+    grid = state['grid']
+    queue = state['queue']
+    
+    # Initialize the score
+    h_score = 0
+    
+    # Analyze plates on the grid
+    for plate in grid:
+        if not plate.slices:
+            continue
+            
+        color_counts = {}
+        for slice in plate.slices:
+            color_counts[slice.color] = color_counts.get(slice.color, 0) + 1
+            
+        if len(color_counts) == 1:  # Single-color plate
+            color = next(iter(color_counts))
+            count = color_counts[color]
+            
+            # Strongly favor plates that are close to completion
+            if count == 6:  # Complete plate (unlikely as these would disappear)
+                h_score -= 100
+            elif count == 5:  # One away from completion
+                h_score -= 80
+            elif count == 4:  # Two away from completion
+                h_score -= 60
+            elif count == 3:  # Three away from completion
+                h_score -= 30
+            else:
+                h_score -= count * 5
+        else:
+            # Heavily penalize mixed-color plates based on diversity
+            h_score += (len(color_counts) - 1) * 15
+            
+            # Less penalty if there's a dominant color
+            max_count = max(color_counts.values())
+            if max_count >= 3:
+                h_score -= 10
+    
+    # Look ahead at the queue - favor moves that would work well with upcoming pieces
+    if len(queue) >= 2:
+        # Check if consecutive queue items have matching colors
+        upcoming_colors = []
+        for _, colors in queue[:min(3, len(queue))]:
+            if colors:
+                upcoming_colors.append(colors[0])  # Most accessible color is at index 0
+                
+        if len(set(upcoming_colors)) < len(upcoming_colors):  # Duplicate colors exist
+            h_score -= 15  # Bonus for potential future matches
+    
+    return h_score  # Lower is better
+
+
+# -------------------------
+# Search Algorithms
+# -------------------------
+
 def generic_solver(initial_game, heuristic_fn, use_greedy=False):
+    """Generic solver that can be configured for A* or Greedy search."""
     start_node = SearchNode(
-        state=copy.deepcopy(initial_game),
+        state=deepcopy(initial_game),
         cost=0,
         heuristic=heuristic_fn(initial_game),
         use_greedy=use_greedy
@@ -66,7 +303,7 @@ def generic_solver(initial_game, heuristic_fn, use_greedy=False):
             for to_idx in current.state.get_adjacent_plates(from_idx):
                 to_plate = current.state.plates[to_idx]
                 if current.state.is_valid_transfer(from_plate, to_plate, group):
-                    new_state = copy.deepcopy(current.state)
+                    new_state = deepcopy(current.state)
                     new_state.move_slices(from_idx, to_idx, len(group))
                     new_state.merge_all_possible_slices()
                     new_cost = current.cost + 1
@@ -83,104 +320,33 @@ def generic_solver(initial_game, heuristic_fn, use_greedy=False):
 
     return None  # No solution found
 
+
 def a_star_solver(initial_game, heuristic_fn):
+    """A* search implementation using the generic solver."""
     return generic_solver(initial_game, heuristic_fn, use_greedy=False)
 
+
 def greedy_solver(initial_game, heuristic_fn):
+    """Greedy search implementation using the generic solver."""
     return generic_solver(initial_game, heuristic_fn, use_greedy=True)
 
-class GameState:
-    def __init__(self, grid, queue, path=None):
-        # Copia profunda para não partilhar estado entre objetos
-        self.grid = [row.copy() for row in grid]
-        self.queue = [p.copy() for p in queue]
-        self.path = path or []
 
-    def get_top_group(self, plate):
-        if not plate:
-            return []
-        top_color = plate[-1]
-        group = []
-        for slice in reversed(plate):
-            if slice == top_color:
-                group.append(slice)
-            else:
-                break
-        return group
-    
-    def is_goal(self):
-        return all(cell is None for row in self.grid for cell in row) and not self.queue
-
-    def successors(self):
-        succs = []
-        if not self.queue:
-            return succs
-
-        next_plate = self.queue[0]  # prato da vez
-        for r in range(len(self.grid)):
-            for c in range(len(self.grid[0])):
-                if self.grid[r][c] is None:
-                    new_grid = [row.copy() for row in self.grid]
-                    new_queue = self.queue[1:]
-                    new_grid[r][c] = next_plate.copy()
-                    new_grid = self.resolve_disappear(new_grid)
-                    new_state = GameState(new_grid, new_queue, self.path + [((r, c), next_plate)])
-                    succs.append(new_state)
-        return succs
-
-    def resolve_disappear(self, grid):
-        for r in range(len(grid)):
-            for c in range(len(grid[0])):
-                plate = grid[r][c]
-                if plate is not None and len(plate) == 6 and all(f == plate[0] for f in plate):
-                    grid[r][c] = None
-        return grid
-
-    def __eq__(self, other):
-        return self.grid == other.grid and self.queue == other.queue
-
-    def __hash__(self):
-        return hash(str(self.grid) + str(self.queue))
-
-
-# Heurística muito simples: contar número de pratos ocupados + pratos restantes na queue
-def simple_heuristic(state: GameState):
-    pratos_na_grid = sum(1 for row in state.grid for cell in row if cell is not None)
-    return pratos_na_grid + len(state.queue)
-
-
-# Exemplo de função para correr o solver com um estado inicial
-def solve_game(grid, queue):
-    initial_state = GameState(grid, queue)
-    path = a_star_solver(initial_state, heuristic_fn=simple_heuristic)
-    return path
-
-
-def evaluate_best_placement(grid, queue):
-    best_score = -float("inf")
-    best_move = (-1, -1)  # (queue_index, grid_index)
-
-    for q_index, plate in enumerate(queue[:3]):  # Só os 3 primeiros pratos visíveis
-        for g_index, cell in enumerate(grid):
-            if len(cell.slices) + len(plate.slices) > 6:
-                continue
-
-            if not cell.slices:
-                score = 1
-            else:
-                top_color = cell.slices[-1].color
-                same = sum(1 for s in plate.slices if s.color == top_color)
-                diff = sum(1 for s in plate.slices if s.color != top_color)
-                score = same * 2 - diff
-
-            if score > best_score:
-                best_score = score
-                best_move = (q_index, g_index)
-
-    return best_move
-
+# -------------------------
+# Bot Algorithms
+# -------------------------
 
 def greedy_bot_solver(grid, queue, apply_moves=False):
+    """
+    Greedy bot solver that evaluates each possible move and chooses the best one.
+    
+    Args:
+        grid: List of plates on the board
+        queue: Queue of upcoming cake plates
+        apply_moves: Whether to apply the moves directly
+        
+    Returns:
+        List of moves to make [(queue_index, grid_index)]
+    """
     best_score = -float('inf')
     best_move = (-1, -1)
 
@@ -200,23 +366,19 @@ def greedy_bot_solver(grid, queue, apply_moves=False):
 
     return [best_move]
 
-import heapq
-
-def heuristic(grid):
-    """Simple heuristic: count mixed-color plates"""
-    h_score = 0
-    for plate in grid:
-        if plate.slices:
-            colors = set(s.color for s in plate.slices)
-            if len(colors) > 1:
-                h_score += 1
-    return h_score
 
 def astar_bot_solver(grid, queue, apply_moves=False):
-    import heapq
-    from copy import deepcopy
-    from game.models import CakeSlice
-
+    """
+    A* bot solver that uses heuristic search to find optimal moves.
+    
+    Args:
+        grid: List of plates on the board
+        queue: Queue of upcoming cake plates
+        apply_moves: Whether to apply the moves directly
+        
+    Returns:
+        List of moves to make [(queue_index, grid_index)]
+    """
     print(f"A* search started")
     print(f"Queue received: {queue}")
     
@@ -312,7 +474,7 @@ def astar_bot_solver(grid, queue, apply_moves=False):
 
         # Create state signature
         grid_signature = tuple(tuple(s.color for s in p.slices) if p.slices else () 
-                               for p in current_grid)
+                              for p in current_grid)
         queue_signature = tuple((i, tuple(colors)) for i, colors in current_queue[:3])
         state_signature = (grid_signature, queue_signature, current_depth)
         
@@ -384,7 +546,7 @@ def astar_bot_solver(grid, queue, apply_moves=False):
         print(f"Found move with score improvement: +{best_partial_state['score'] - initial_score}")
         return [best_partial_state['path'][0]] if apply_moves else best_partial_state['path']
     
-        # Fallback to simple placement if no good moves found
+    # Fallback to simple placement if no good moves found
     if empty_slots and queue:
         print(f"Falling back to simple placement")
         # Try to make a smarter fallback by choosing plates with adjacent matches
@@ -436,335 +598,3 @@ def astar_bot_solver(grid, queue, apply_moves=False):
     
     print("A* could not find any valid moves")
     return []
-
-
-def improved_heuristic(state):
-    """
-    Enhanced heuristic that better prioritizes states leading to plate completions and merges
-    """
-    grid = state['grid']
-    queue = state['queue']
-    
-    # Initialize the score
-    h_score = 0
-    
-    # Analyze plates on the grid
-    plate_colors = {}  # Track colors across plates for potential merges
-    uniform_plates = 0
-    
-    for idx, plate in enumerate(grid):
-        if not plate.slices:
-            continue
-            
-        color_counts = {}
-        for slice in plate.slices:
-            color_counts[slice.color] = color_counts.get(slice.color, 0) + 1
-            
-            # Also track colors across all plates for potential merges
-            plate_colors[slice.color] = plate_colors.get(slice.color, 0) + 1
-            
-        if len(color_counts) == 1:  # Single-color plate
-            uniform_plates += 1
-            color = next(iter(color_counts))
-            count = color_counts[color]
-            
-            # Strongly favor plates that are close to completion
-            if count == 6:  # Complete plate (unlikely as these would disappear)
-                h_score -= 100
-            elif count == 5:  # One away from completion
-                h_score -= 80
-            elif count == 4:  # Two away from completion
-                h_score -= 60
-            elif count == 3:  # Three away from completion
-                h_score -= 30
-            else:
-                h_score -= count * 5
-        else:
-            # Heavily penalize mixed-color plates based on diversity
-            h_score += (len(color_counts) - 1) * 15
-            
-            # Less penalty if there's a dominant color
-            max_color = max(color_counts.keys(), key=lambda k: color_counts[k])
-            max_count = color_counts[max_color]
-            if max_count >= 3:
-                h_score -= 8  # Smaller bonus for plates with dominant color
-                
-                # Check if we have potential to complete this plate with queue items
-                for _, cake_colors in queue:
-                    if max_color in cake_colors:
-                        h_score -= 5  # Extra bonus when the queue has matching colors
-    
-    # Reward states with many uniform plates
-    h_score -= uniform_plates * 10
-    
-    # Look ahead at the queue - favor moves that would work well with upcoming pieces
-    if queue:
-        queue_colors = []
-        for _, colors in queue[:min(3, len(queue))]:
-            queue_colors.extend(colors)
-            
-        # Reward states where queue colors match existing plates
-        for color, count in plate_colors.items():
-            matching_in_queue = queue_colors.count(color)
-            if matching_in_queue > 0:
-                h_score -= matching_in_queue * 2  # Bonus for potential merges
-    
-    return h_score  # Lower is better
-
-def improved_simulate_merge(grid, placed_idx, current_score):
-    from collections import Counter
-    from game.core import CakeGame  # Import to use the get_adjacent_plates method
-    
-    score = current_score
-    
-    # First check for plate completion at placed position
-    plate = grid[placed_idx]
-    if len(plate.slices) == 6:
-        color = plate.slices[0].color
-        if all(s.color == color for s in plate.slices):
-            score += 50  # Already got +10 for placement
-            plate.slices = []  # Clear the plate
-    
-    try:
-        # Create a temporary game object to use its get_adjacent_plates method
-        # Estimate dimensions based on grid length
-        grid_size = len(grid)
-        grid_width = int(grid_size ** 0.5)
-        if grid_width * grid_width < grid_size:
-            grid_width += 1
-        grid_height = (grid_size + grid_width - 1) // grid_width
-        
-        temp_game = CakeGame(grid_width, grid_height)
-        adjacent_indices = temp_game.get_adjacent_plates(placed_idx)
-        
-        # Filter to ensure indices are valid (additional safety check)
-        adjacent_indices = [idx for idx in adjacent_indices if 0 <= idx < len(grid)]
-        
-        # Process adjacent plates
-        for adj_idx in adjacent_indices:
-            adj_plate = grid[adj_idx]
-            if not adj_plate.slices or not plate.slices:
-                continue
-                
-            # Your merging logic would go here
-            # This is just a placeholder to ensure the function works
-            
-    except Exception as e:
-        print(f"Warning in adjacency calculation: {e}")
-        # Continue without merging if there's an error
-    
-    return score
-
-
-
-def simulate_move_colors(grid, from_idx, to_idx, color):
-    """
-    Simulate moving slices of a specific color between plates
-    """
-    from_plate = grid[from_idx]
-    to_plate = grid[to_idx]
-    
-    color_indices = [i for i, s in enumerate(from_plate.slices) if s.color == color]
-    
-    if not color_indices:
-        return False
-    
-    available_space = 6 - len(to_plate.slices)  # Assuming max capacity is 6
-    
-    if available_space <= 0:
-        return False
-    
-    moved = False
-    for idx in sorted(color_indices, reverse=True)[:available_space]:
-        slice_to_move = from_plate.slices[idx]
-        to_plate.slices.append(slice_to_move)
-        from_plate.slices.pop(idx)
-        moved = True
-        
-        # Update color indices
-        color_indices = [i for i, s in enumerate(from_plate.slices) if s.color == color]
-    
-    return moved
-
-def improved_heuristic(state):
-    """
-    Enhanced heuristic that better guides the search toward achieving required score
-    """
-    grid = state['grid']
-    queue = state['queue']
-    
-    # Initialize the score
-    h_score = 0
-    
-    # Analyze plates on the grid
-    for plate in grid:
-        if not plate.slices:
-            continue
-            
-        color_counts = {}
-        for slice in plate.slices:
-            color_counts[slice.color] = color_counts.get(slice.color, 0) + 1
-            
-        if len(color_counts) == 1:  # Single-color plate
-            color = next(iter(color_counts))
-            count = color_counts[color]
-            
-            # Strongly favor plates that are close to completion
-            if count == 6:  # Complete plate (unlikely as these would disappear)
-                h_score -= 100
-            elif count == 5:  # One away from completion
-                h_score -= 80
-            elif count == 4:  # Two away from completion
-                h_score -= 60
-            elif count == 3:  # Three away from completion
-                h_score -= 30
-            else:
-                h_score -= count * 5
-        else:
-            # Heavily penalize mixed-color plates based on diversity
-            h_score += (len(color_counts) - 1) * 15
-            
-            # Less penalty if there's a dominant color
-            max_count = max(color_counts.values())
-            if max_count >= 3:
-                h_score -= 10
-    
-    # Look ahead at the queue - favor moves that would work well with upcoming pieces
-    if len(queue) >= 2:
-        # Check if consecutive queue items have matching colors
-        upcoming_colors = []
-        for _, colors in queue[:min(3, len(queue))]:
-            if colors:
-                upcoming_colors.append(colors[0])  # Most accessible color is at index 0
-                
-        if len(set(upcoming_colors)) < len(upcoming_colors):  # Duplicate colors exist
-            h_score -= 15  # Bonus for potential future matches
-    
-    return h_score  # Lower is better
-
-def simulate_merge(grid):
-    """Simplified version of merge_all_possible_slices to estimate state after merges"""
-    # First check for plate completions
-    for plate_idx, plate in enumerate(grid):
-        # Check for plate completion
-        if len(plate.slices) == 6:
-            first_color = plate.slices[0].color if plate.slices else None
-            if first_color and all(s.color == first_color for s in plate.slices):
-                plate.slices = []  # Clear the plate
-                
-    # Simple color consolidation
-    for plate_idx, plate in enumerate(grid):
-        if not plate.slices:
-            continue
-            
-        colors = [s.color for s in plate.slices]
-        if len(set(colors)) > 1:
-            # Sort slices by color to simulate some consolidation
-            plate.slices.sort(key=lambda s: s.color)
-
-
-def calculate_heuristic(state):
-    score = evaluate_board(state['grid'])
-    goal_score = 1000  # or fetch dynamically
-    score_gap = max(0, goal_score - score)
-    
-    # Bonus if plates are close to disappearing
-    bonus = 0
-    for plate in state['grid']:
-        if len(plate.slices) == 6:
-            if all(s.color == plate.slices[0].color for s in plate.slices):
-                bonus += 100  # big boost
-            elif len(set(s.color for s in plate.slices)) <= 2:
-                bonus += 10  # small bonus for nearly uniform
-
-    return score_gap - bonus
-
-def is_goal_state(grid, queue):
-    # If queue still has items, we haven't reached the goal
-    if queue:
-        return False
-        
-    # Check all plates are properly sorted
-    for plate in grid:
-        if plate.slices:
-            colors = set(slice.color for slice in plate.slices)
-            if len(colors) > 1:
-                # Found a mixed-color plate, not a goal state
-                return False
-    
-    # Queue is empty and all plates are sorted
-    return True
-
-# def bfs_bot_solver(grid, queue, apply_moves=False):
-#        from game.core import merge_all_possible_slices
-#     initial_state = (deepcopy(grid), deepcopy(queue), [])
-#     queue_bfs = deque([initial_state])
-#     visited = set()
-
-#     def serialize(g, q):
-#         return str([[s.color for s in plate.slices] for plate in g]) + str(q)
-
-#     while queue_bfs:
-#         g, q, path = queue_bfs.popleft()
-#         state_key = serialize(g, q)
-#         if state_key in visited:
-#             continue
-#         visited.add(state_key)
-
-#         for q_index, plate in enumerate(q[:3]):
-#             for g_index, cell in enumerate(g):
-#                 if len(cell.slices) + len(plate) > 6:
-#                     continue  # não cabe
-
-#                 new_g = deepcopy(g)
-#                 new_q = deepcopy(q)
-#                 new_path = list(path)
-
-#                 new_g[g_index].slices.extend([CakeSlice(c, 1) for c in plate])
-#                 merge_all_possible_slices(new_g)
-#                 del new_q[q_index]
-#                 new_path.append((q_index, g_index))
-
-#                 if not new_q:
-#                     return new_path if apply_moves else [new_path[0]]
-
-#                 queue_bfs.append((new_g, new_q, new_path))
-
-#     return []
-
-
-# def dfs_bot_solver(grid, queue, apply_moves=False):
-#     initial_state = (deepcopy(grid), deepcopy(queue), [])
-#     stack_dfs = [(initial_state)]
-#     visited = set()
-
-#     def serialize(g, q):
-#         return str([[s.color for s in plate.slices] for plate in g]) + str(q)
-
-#     while stack_dfs:
-#         g, q, path = stack_dfs.pop()
-#         state_key = serialize(g, q)
-#         if state_key in visited:
-#             continue
-#         visited.add(state_key)
-
-#         for q_index, plate in enumerate(q[:3]):
-#             for g_index, cell in enumerate(g):
-#                 if len(cell.slices) + len(plate) > 6:
-#                     continue  # não cabe
-
-#                 new_g = deepcopy(g)
-#                 new_q = deepcopy(q)
-#                 new_path = list(path)
-
-#                 new_g[g_index].slices.extend([CakeSlice(c, 1) for c in plate])
-#                 merge_all_possible_slices(new_g)
-#                 del new_q[q_index]
-#                 new_path.append((q_index, g_index))
-
-#                 if not new_q:
-#                     return new_path if apply_moves else [new_path[0]]
-
-#                 stack_dfs.append((new_g, new_q, new_path))
-
-#     return []

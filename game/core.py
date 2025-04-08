@@ -1,13 +1,17 @@
 import pygame
-from typing import List, Tuple, Optional
+from typing import List
 from game.utils import load_level_file
 from dataclasses import dataclass
 import os
 from game.models import CakeSlice
+from collections import Counter
+
+
+# -------------------------
+# Data Structures
+# -------------------------
 
 @dataclass
-
-
 class Plate:
     def __init__(self, max_capacity: int = 6):
         self.slices: List[CakeSlice] = []
@@ -16,24 +20,30 @@ class Plate:
     def __str__(self):
         return " ".join(str(layer) for layer in self.slices)
 
+
 class CakeGame:
-    # Core game logic
+    # -------------------------
+    # Initialization
+    # -------------------------
+    
     def __init__(self, width: int = 5, height: int = 4, max_capacity: int = 6):
         self.width = width
         self.height = height
         self.max_capacity = max_capacity
         self.plates: List[Plate] = [Plate(max_capacity) for _ in range(width * height)]
         self.moves = 0
-        self.selected_plate = None
-        self.selected_layer_pos = None
         self.score = 0
-        self.base_score = 0  
+        self.ui_callback = None
+        self.ui_level_switch = None
 
+    # -------------------------
+    # Level Loading & State
+    # -------------------------
 
-    # Load level from file: plates, queue, score requirement
     def initialize_level(self, level_file: str):
         self.plates = [Plate(self.max_capacity) for _ in range(self.width * self.height)]
         self.moves = 0
+        self.score = 0
 
         try:
             grid_lines = load_level_file(level_file)
@@ -77,15 +87,16 @@ class CakeGame:
         except FileNotFoundError:
             print(f"Error: Level file {level_file} not found")
 
-    
     def get_state_hash(self) -> str:
         return "|".join(str(plate) for plate in self.plates)
     
     def sort_plate_by_color(self, plate):
         plate.slices.sort(key=lambda slice: slice.color)
-    
 
-    # Get indexes of plates adjacent to the given plate
+    # -------------------------
+    # Game Logic & Rules
+    # -------------------------
+
     def get_adjacent_plates(self, idx: int) -> List[int]:
         row = idx // self.width
         col = idx % self.width
@@ -100,9 +111,8 @@ class CakeGame:
             neighbors.append(idx + 1)  # Right
         return neighbors
 
-
     def is_goal_state(self):
-        for idx, plate in enumerate(self.plates):
+        for plate in self.plates:
             if not plate.slices:
                 continue  
                 
@@ -112,22 +122,23 @@ class CakeGame:
                 
         return True
 
+    # -------------------------
+    # Merging & Slice Movement
+    # -------------------------
 
-    # Specialized greedy algorithm designed for the specific mechanics of our cake sort game.
-
-    # Main algorithm to consolidate same-colored slices
-    # 1. Find common colors between adjacent plates
-    # 2. Merge colors to prioritize consolidation
-    # 3. Handle mixed plates by moving minority colors
     def merge_all_possible_slices(self):
-        from collections import Counter
-    
+        """
+        Main algorithm to consolidate same-colored slices:
+        1. Find common colors between adjacent plates
+        2. Merge colors to prioritize consolidation
+        3. Handle mixed plates by moving minority colors
+        """
         merges_occurred = False
         
         while True:
             merged_this_round = False
             
-            # PHASE 1: Check all adjacent plate pairs for color consolidation
+            # Check all adjacent plate pairs for color consolidation
             for plate_idx, plate in enumerate(self.plates):
                 # Skip empty plates
                 if not plate.slices:
@@ -138,6 +149,9 @@ class CakeGame:
                 
                 # For each adjacent plate, check for common colors
                 for adj_idx in adjacent_plates:
+                    if adj_idx >= len(self.plates):
+                        continue
+                        
                     adj_plate = self.plates[adj_idx]
                     
                     if not adj_plate.slices:
@@ -185,10 +199,8 @@ class CakeGame:
                 if merged_this_round:
                     break
             
-
             if not merged_this_round:
-
-                # PHASE 2: Handle mixed color plates
+                # Handle mixed color plates
                 mixed_plates = []
                 for idx, plate in enumerate(self.plates):
                     if not plate.slices:
@@ -257,9 +269,12 @@ class CakeGame:
         
         return merges_occurred
 
+    # -------------------------
+    # Helper Methods
+    # -------------------------
 
-    # Move slices of specified color between plates
     def _move_color_between_plates(self, from_idx, to_idx, color):
+        """Move slices of specified color between plates"""
         from_plate = self.plates[from_idx]
         to_plate = self.plates[to_idx]
         
@@ -282,7 +297,7 @@ class CakeGame:
             
             color_indices = [i for i, s in enumerate(from_plate.slices) if s.color == color]
         
-        if moved and not from_plate.slices and hasattr(self, 'ui_callback') and self.ui_callback:
+        if moved and not from_plate.slices and self.ui_callback:
             self.ui_callback(from_idx)
         
         # Check for completions
@@ -294,12 +309,9 @@ class CakeGame:
 
         return moved
 
-
-    # Check all plates for completion (6 same-color slices)
     def _check_for_completed_plates(self):
         for idx, plate in enumerate(self.plates):
             self._check_plate_completion(idx)
-
 
     def _check_plate_completion(self, plate_idx):
         plate = self.plates[plate_idx]
@@ -314,8 +326,8 @@ class CakeGame:
             # Award points
             self.score += len(plate.slices) * 10
             
-            # Trigger animation
-            if hasattr(self, 'ui_callback') and self.ui_callback:
+            # Trigger animation if callback exists
+            if self.ui_callback:
                 self.ui_callback(plate_idx)
                 
             # Clear the plate
