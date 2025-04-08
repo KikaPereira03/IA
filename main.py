@@ -40,6 +40,13 @@ class CakeGameUI:
         self.selected_color = (255, 255, 0, 100)
         self.text_color = (80, 80, 100)
 
+        # Hint button properties
+        self.hint_button_rect = pygame.Rect(self.screen_width - 120, 40, 100, 40)
+        self.hint_active = False
+        self.hint_timer = 0
+        self.hint_duration = 2000  
+        self.hint_move = None
+
         self.color_map = {
             'R': (255, 80, 80), 'G': (100, 200, 100), 'B': (100, 150, 255),
             'Y': (255, 230, 100), 'P': (230, 100, 230), 'O': (255, 160, 80),
@@ -113,6 +120,56 @@ class CakeGameUI:
         score_text = pygame.font.SysFont("Arial", 16).render(f"{self.game.score} / {required_score}", True, (70, 70, 70))
         self.screen.blit(score_text, (self.screen_width // 2 - score_text.get_width() // 2, bar_y - 26))
 
+    def draw_hint_button(self):
+        # Draw hint button
+        button_color = (150, 200, 150) if self.hint_button_rect.collidepoint(pygame.mouse.get_pos()) else (120, 180, 120)
+        pygame.draw.rect(self.screen, button_color, self.hint_button_rect, 0, 10)
+        pygame.draw.rect(self.screen, (100, 160, 100), self.hint_button_rect, 2, 10)
+        
+        hint_text = self.font.render("Hint", True, (255, 255, 255))
+        self.screen.blit(hint_text, (self.hint_button_rect.centerx - hint_text.get_width() // 2, 
+                                     self.hint_button_rect.centery - hint_text.get_height() // 2))
+
+    def draw_hint(self):
+        if not self.hint_active or not self.hint_move:
+            return
+
+        # Highlight the queue item to move
+        q_idx, g_idx = self.hint_move
+        queue_rect = self.get_queue_slot_rect(q_idx)
+        
+        # Draw arrow from queue to destination
+        grid_rect = self.get_cell_rect(g_idx)
+        
+        # Pulsating effect
+        alpha = 128 + int(100 * abs(pygame.time.get_ticks() % 1000 - 500) / 500)
+        
+        # Highlight queue item
+        highlight = pygame.Surface((queue_rect.width, queue_rect.height), pygame.SRCALPHA)
+        highlight.fill((255, 255, 0, alpha))
+        self.screen.blit(highlight, queue_rect.topleft)
+        
+        # Highlight target plate
+        highlight2 = pygame.Surface((grid_rect.width, grid_rect.height), pygame.SRCALPHA)
+        highlight2.fill((255, 255, 0, alpha))
+        self.screen.blit(highlight2, grid_rect.topleft)
+        
+        # Draw arrow
+        pygame.draw.line(self.screen, (255, 255, 0), 
+                          (queue_rect.centerx, queue_rect.centery),
+                          (grid_rect.centerx, grid_rect.centery), 3)
+        
+        # Draw arrowhead
+        angle = pygame.math.Vector2(grid_rect.centerx - queue_rect.centerx, 
+                                   grid_rect.centery - queue_rect.centery).normalize()
+        pos = (grid_rect.centerx - angle.x * 20, grid_rect.centery - angle.y * 20)
+        
+        # Arrow points
+        p1 = (pos[0] + angle.y * 10, pos[1] - angle.x * 10)
+        p2 = (pos[0] - angle.y * 10, pos[1] + angle.x * 10)
+        
+        pygame.draw.polygon(self.screen, (255, 255, 0), [pos, p1, p2])
+
     def draw(self):
         self.screen.fill(self.bg_color)
         for idx, plate in enumerate(self.game.plates):
@@ -137,6 +194,11 @@ class CakeGameUI:
         title = self.big_font.render("Cake Sort Puzzle", True, self.text_color)
         self.screen.blit(title, (self.screen_width // 2 - title.get_width() // 2, 40))
         self.draw_score_bar()
+        self.draw_hint_button()
+
+        if self.hint_active:
+            self.draw_hint()
+
         pygame.display.flip()
 
     # -------------------------
@@ -163,6 +225,10 @@ class CakeGameUI:
         return False
 
     def handle_click(self, pos):
+        if self.hint_button_rect.collidepoint(pos):  
+            self.show_hint()
+            return
+    
         for idx, plate in enumerate(self.queue_plates):
             if self.get_queue_slot_rect(idx).collidepoint(pos) and plate:
                 self.selected_queue_idx = idx
@@ -197,6 +263,44 @@ class CakeGameUI:
             if self.get_cell_rect(idx).collidepoint(pos) and plate.slices:
                 self.selected_plate = idx
                 return
+
+
+    # -------------------------
+    # Hint Feature
+    # -------------------------
+    
+    def show_hint(self):
+        """Generate and display a hint using the game's enhanced greedy_bot_solver"""
+        # Prepare the queue data in the format expected by greedy_bot_solver
+        queue_data = []
+        for idx, plate in enumerate(self.queue_plates):
+            if plate:
+                cake_colors = [slice.color for slice in plate]
+                queue_data.append((idx, cake_colors))
+        
+        if not queue_data:
+            print("No hint available - queue is empty")
+            return
+        
+        # Get hint from the enhanced greedy solver, passing game instance for context
+        hint_moves = greedy_bot_solver(self.game.plates, queue_data, game_instance=self.game)
+        
+        if hint_moves and hint_moves[0] != (-1, -1):
+            # Store the hint move
+            self.hint_move = hint_moves[0]
+            self.hint_active = True
+            self.hint_timer = pygame.time.get_ticks()
+            print(f"Hint: Move queue {self.hint_move[0]} to grid {self.hint_move[1]}")
+        else:
+            print("No hint available")
+        
+    def update_hint_state(self):
+        """Update the hint state based on the timer"""
+        if self.hint_active:
+            current_time = pygame.time.get_ticks()
+            if current_time - self.hint_timer > self.hint_duration:
+                self.hint_active = False
+
 
     # -------------------------
     # Popups
@@ -497,6 +601,8 @@ class CakeGameUI:
                     result = self.handle_click(event.pos)
                     if result == True:
                         running = False
+
+            self.update_hint_state()
 
             self.draw()
             self.clock.tick(60)

@@ -335,14 +335,16 @@ def greedy_solver(initial_game, heuristic_fn):
 # Bot Algorithms
 # -------------------------
 
-def greedy_bot_solver(grid, queue, apply_moves=False):
+def greedy_bot_solver(grid, queue, apply_moves=False, game_instance=None):
     """
-    Greedy bot solver that evaluates each possible move and chooses the best one.
+    Enhanced greedy bot solver that evaluates each possible move and chooses the best one.
+    Only considers empty plates as valid placement locations.
     
     Args:
         grid: List of plates on the board
         queue: Queue of upcoming cake plates
         apply_moves: Whether to apply the moves directly
+        game_instance: Optional CakeGame instance for improved evaluation
         
     Returns:
         List of moves to make [(queue_index, grid_index)]
@@ -350,22 +352,37 @@ def greedy_bot_solver(grid, queue, apply_moves=False):
     best_score = -float('inf')
     best_move = (-1, -1)
 
+    # Debug - print board state
+    empty_plates = [i for i, cell in enumerate(grid) if not cell.slices]
+    print(f"Evaluating moves - {len(empty_plates)} empty plates available")
+
     for q_index, plate in queue:
         for g_index, cell in enumerate(grid):
-            if len(cell.slices) + len(plate) > 6:
+            # Only consider EMPTY plates
+            if len(cell.slices) > 0:
+                continue
+                
+            # Check if cake would fit in the plate
+            if len(plate) > 6:  # Max capacity check
                 continue
 
+            # Create a temporary grid with this move applied
             temp_grid = deepcopy(grid)
             temp_grid[g_index].slices.extend([CakeSlice(c, 1) for c in plate])
 
-            score = evaluate_board(temp_grid)
+            # Evaluate with enhanced function
+            move = (q_index, g_index)
+            score = evaluate_board(temp_grid, game_instance, move)
+
+            # Debug - print score for this move
+            print(f"Move queue {q_index} to grid {g_index}: score = {score}")
 
             if score > best_score:
                 best_score = score
-                best_move = (q_index, g_index)
+                best_move = move
 
+    print(f"Best move: queue {best_move[0]} to grid {best_move[1]} with score {best_score}")
     return [best_move]
-
 
 def astar_bot_solver(grid, queue, apply_moves=False):
     """
