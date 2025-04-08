@@ -5,7 +5,6 @@ import os
 from game.core import CakeGame, CakeSlice
 from game.solver import greedy_bot_solver, astar_bot_solver
 from game.models import CakeSlice
-from game.utils import save_solver_results
 
 
 class CakeGameUI:
