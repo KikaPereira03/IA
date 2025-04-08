@@ -651,28 +651,30 @@ class CakeGameUI:
     # Run the game loop
     def run(self):
         running = True
-        while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_s:
-                        if self.bot_algorithm:
-                            self.run_solver_with_algorithm(self.bot_algorithm)
-
-                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    result = self.handle_click(event.pos)
-                    if result == True:
+        try:
+            while running:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
                         running = False
 
-            self.update_hint_state()
+                    elif event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_s:
+                            if self.bot_algorithm:
+                                self.run_solver_with_algorithm(self.bot_algorithm)
 
-            self.draw()
-            self.clock.tick(60)
+                    elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        result = self.handle_click(event.pos)
+                        if result == True:
+                            running = False
 
-        pygame.quit()
-        return
+                self.update_hint_state()
+                self.draw()
+                self.clock.tick(60)
+        except KeyboardInterrupt:
+            print("\nGame closed by user.")
+        finally:
+            pygame.quit()
+            return
 
 if __name__ == "__main__":
     game_ui = CakeGameUI()

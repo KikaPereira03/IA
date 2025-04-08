@@ -228,19 +228,26 @@ class CakeMenuUI:
 
     def run(self):
         running = True
-        while running:
-            button_rects = self.draw()
-            running, action = self.handle_events(button_rects)
-            if action == 'start_game':
-                level_file = f"game/levels/level{self.selected_level + 1}.txt"
-                game_ui = self.game_ui_class(level_file=level_file)
-                game_ui.run()
-                pygame.display.set_mode((self.screen_width, self.screen_height))
-                pygame.display.set_caption("Cake Sort Puzzle - Menu")
-                running = True
-            self.clock.tick(60)
-        pygame.quit()
-        sys.exit()
+        try:
+            while running:
+                button_rects = self.draw()
+                running, action = self.handle_events(button_rects)
+                if action == 'start_game':
+                    level_file = f"game/levels/level{self.selected_level + 1}.txt"
+                    game_ui = self.game_ui_class(level_file=level_file)
+                    try:
+                        game_ui.run()
+                    except KeyboardInterrupt:
+                        print("\nGame closed by user.")
+                    pygame.display.set_mode((self.screen_width, self.screen_height))
+                    pygame.display.set_caption("Cake Sort Puzzle - Menu")
+                    running = True
+                self.clock.tick(60)
+        except KeyboardInterrupt:
+            print("\nExiting game...")
+        finally:
+            pygame.quit()
+            sys.exit(0) 
 
 # -------------------------
 # Entry Point
