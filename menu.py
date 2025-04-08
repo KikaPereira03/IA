@@ -1,12 +1,12 @@
 import pygame
 import sys
-from game.models import CakeSlice
 from game.utils import draw_text
 
 class CakeMenuUI:
     def __init__(self, game_ui_class):
         pygame.init()
         self.game_ui_class = game_ui_class
+
         self.screen_width = 1000
         self.screen_height = 800
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
@@ -43,15 +43,23 @@ class CakeMenuUI:
         self.selected_bot = None
         self.bot_option_rects = []
 
+    # -------------------------
+    # Drawing Helpers
+    # -------------------------
+
     def get_button_rect(self, y_position):
         x = (self.screen_width - self.button_width) // 2
         return pygame.Rect(x, y_position, self.button_width, self.button_height)
+
+    def is_mouse_over_button(self, y):
+        return self.get_button_rect(y).collidepoint(pygame.mouse.get_pos())
 
     def draw_button(self, text, y_position, hover=False):
         button_rect = self.get_button_rect(y_position)
         color = self.highlight_color if hover else self.button_color
         pygame.draw.rect(self.screen, color, button_rect, 0, border_radius=10)
         pygame.draw.rect(self.screen, self.button_border_color, button_rect, 2, border_radius=10)
+
         text_surf = self.button_font.render(text, True, self.text_color)
         text_rect = text_surf.get_rect(center=button_rect.center)
         self.screen.blit(text_surf, text_rect)
@@ -70,15 +78,11 @@ class CakeMenuUI:
         left_arrow_rect = pygame.Rect(button_rect.x - 60, button_rect.y, 50, button_rect.height)
         right_arrow_rect = pygame.Rect(button_rect.x + button_rect.width + 10, button_rect.y, 50, button_rect.height)
 
-        pygame.draw.rect(self.screen, self.button_color, left_arrow_rect, 0, 15)
-        pygame.draw.rect(self.screen, self.button_color, right_arrow_rect, 0, 15)
-        pygame.draw.rect(self.screen, self.button_border_color, left_arrow_rect, 2, 15)
-        pygame.draw.rect(self.screen, self.button_border_color, right_arrow_rect, 2, 15)
-
-        left_text = self.button_font.render("<", True, self.text_color)
-        right_text = self.button_font.render(">", True, self.text_color)
-        self.screen.blit(left_text, left_text.get_rect(center=left_arrow_rect.center))
-        self.screen.blit(right_text, right_text.get_rect(center=right_arrow_rect.center))
+        for arrow_rect, symbol in zip([left_arrow_rect, right_arrow_rect], ["<", ">"]):
+            pygame.draw.rect(self.screen, self.button_color, arrow_rect, 0, 15)
+            pygame.draw.rect(self.screen, self.button_border_color, arrow_rect, 2, 15)
+            text = self.button_font.render(symbol, True, self.text_color)
+            self.screen.blit(text, text.get_rect(center=arrow_rect.center))
 
         return button_rect, left_arrow_rect, right_arrow_rect
 
@@ -89,7 +93,7 @@ class CakeMenuUI:
         pygame.draw.rect(self.screen, color, button_rect, 0, 15)
         pygame.draw.rect(self.screen, self.button_border_color, button_rect, 2, 15)
 
-        text = f"Game Rules"
+        text = "Game Rules"
         text_surf = self.button_font.render(text, True, self.text_color)
         self.screen.blit(text_surf, text_surf.get_rect(center=button_rect.center))
 
@@ -137,7 +141,7 @@ class CakeMenuUI:
             popup_height
         )
 
-        bot_options = ["Greedy", "A*", "BFS", "DFS"]
+        bot_options = self.bot_options
         selected_bot = None
 
         while popup_running:
@@ -149,7 +153,7 @@ class CakeMenuUI:
             self.screen.blit(title, (popup_rect.centerx - title.get_width() // 2, popup_rect.top + 20))
 
             for i, bot in enumerate(bot_options):
-                btn_rect = pygame.Rect(popup_rect.left + 40, popup_rect.top + 60 + i*45, 220, 35)
+                btn_rect = pygame.Rect(popup_rect.left + 40, popup_rect.top + 60 + i * 45, 220, 35)
                 pygame.draw.rect(self.screen, (200, 180, 250), btn_rect, border_radius=10)
                 pygame.draw.rect(self.screen, (140, 120, 200), btn_rect, 2, border_radius=10)
 
@@ -165,7 +169,7 @@ class CakeMenuUI:
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     mouse_pos = pygame.mouse.get_pos()
                     for i, bot in enumerate(bot_options):
-                        btn_rect = pygame.Rect(popup_rect.left + 40, popup_rect.top + 60 + i*45, 220, 35)
+                        btn_rect = pygame.Rect(popup_rect.left + 40, popup_rect.top + 60 + i * 45, 220, 35)
                         if btn_rect.collidepoint(mouse_pos):
                             selected_bot = bot.lower()
                             popup_running = False
@@ -176,8 +180,9 @@ class CakeMenuUI:
             game_ui = CakeGameUI(level_file=f"game/levels/level{self.selected_level + 1}.txt", bot_algorithm=selected_bot)
             game_ui.run()
 
-    def is_mouse_over_button(self, button_y):
-        return self.get_button_rect(button_y).collidepoint(pygame.mouse.get_pos())
+    # -------------------------
+    # Main Menu Logic
+    # -------------------------
 
     def draw(self):
         self.screen.fill(self.bg_color)
@@ -236,6 +241,10 @@ class CakeMenuUI:
             self.clock.tick(60)
         pygame.quit()
         sys.exit()
+
+# -------------------------
+# Entry Point
+# -------------------------
 
 if __name__ == "__main__":
     from main import CakeGameUI
